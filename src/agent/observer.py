@@ -53,9 +53,15 @@ class DOMObserver:
             
             document.body.appendChild(box);
             
-            // Extract meaningful text
-            let text = el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || el.name || '';
-            text = text.trim().substring(0, 50); // Keep it short
+            // Extract meaningful text — keep each source separate so the LLM can distinguish
+            // between current value, placeholder hint, and accessible label
+            const innerText = (el.innerText || '').trim().substring(0, 50);
+            const value = (el.value || '').trim().substring(0, 50);
+            const placeholder = (el.placeholder || el.getAttribute('placeholder') || '').trim().substring(0, 50);
+            const ariaLabel = (el.getAttribute('aria-label') || el.getAttribute('title') || '').trim().substring(0, 50);
+            
+            // Primary label: prefer aria-label for icon-only elements, else innerText, else value
+            let text = innerText || ariaLabel || value || placeholder || el.name || '';
             
             // Check if element is disabled
             let disabled = el.disabled || el.getAttribute('aria-disabled') === 'true';
@@ -69,6 +75,9 @@ class DOMObserver:
                 tag: el.tagName.toLowerCase(),
                 type: el.type || '',
                 text: text,
+                value: value,          // actual typed content
+                placeholder: placeholder, // hint shown when empty
+                aria_label: ariaLabel,
                 disabled: disabled,
                 x: centerX,
                 y: centerY
@@ -105,6 +114,29 @@ class DOMObserver:
         for el in elements:
             type_str = f" type='{el['type']}'" if el['type'] else ""
             disabled_str = " [DISABLED]" if el.get('disabled') else ""
-            lines.append(f"[{el['id']}] <{el['tag']}{type_str}>{disabled_str} {el['text']}")
+            
+            # Build a rich label that distinguishes empty inputs from filled ones
+            label = el['text']
+            extra = []
+            
+            # If it's an input/textarea and the visible text IS the placeholder (field is empty)
+            is_input = el['tag'] in ('input', 'textarea')
+            has_value = bool(el.get('value', '').strip())
+            placeholder = el.get('placeholder', '').strip()
+            aria_label = el.get('aria_label', '').strip()
+            
+            if is_input and not has_value:
+                if placeholder:
+                    extra.append(f'[empty, hint: "{placeholder}"]')
+                else:
+                    extra.append('[empty]')
+            elif is_input and has_value:
+                extra.append(f'[value: "{el["value"]}"]')
+            
+            if aria_label and aria_label != label:
+                extra.append(f'[aria: "{aria_label}"]')
+            
+            extra_str = ' ' + ' '.join(extra) if extra else ''
+            lines.append(f"[{el['id']}] <{el['tag']}{type_str}>{disabled_str} {label}{extra_str}")
             
         return "\n".join(lines), base64_image, elements, page_title
