@@ -47,7 +47,11 @@ class PlaywrightActor:
                             await locator.fill(action.text_to_type, timeout=3000, force=True)
                         except Exception:
                             # Fallback for contenteditable divs (fill() only works on input/textarea)
-                            await locator.click(timeout=2000)
+                            # Double-click to enter edit mode, then type
+                            try:
+                                await locator.dblclick(timeout=2000)
+                            except Exception:
+                                await locator.click(timeout=2000)
                             await page.keyboard.press("Control+a")
                             await page.keyboard.type(action.text_to_type)
                 except Exception as locator_err:
