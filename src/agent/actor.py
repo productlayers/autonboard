@@ -43,13 +43,35 @@ class PlaywrightActor:
                     if action.action_type == "click":
                         await locator.click(timeout=3000, force=True)
                     elif action.action_type == "type" and action.text_to_type:
-                        await locator.fill(action.text_to_type, timeout=3000, force=True)
+                        try:
+                            await locator.fill(action.text_to_type, timeout=3000, force=True)
+                        except Exception:
+                            # Fallback for contenteditable divs (fill() only works on input/textarea)
+                            # Double-click to enter edit mode, then type
+                            try:
+                                await locator.dblclick(timeout=2000)
+                            except Exception:
+                                await locator.click(timeout=2000)
+                            await page.keyboard.press("Control+a")
+                            await page.keyboard.type(action.text_to_type)
                 except Exception as locator_err:
-                    # Fallback: use coordinate-based clicking from the screenshot annotation
-                    if action.action_type == "click" and element_x is not None and element_y is not None:
-                        await page.mouse.click(element_x, element_y)
-                    else:
-                        raise locator_err
+                    # Retry 1: Hover the element first (reveals hidden parent UI like Spotify's track action row)
+                    # then click — this handles hover-reveal button patterns
+                    try:
+                        await locator.hover(timeout=2000)
+                        await page.wait_for_timeout(400)
+                        if action.action_type == "click":
+                            await locator.click(timeout=3000)
+                        elif action.action_type == "type" and action.text_to_type:
+                            await locator.fill(action.text_to_type, timeout=3000)
+                    except Exception:
+                        # Retry 2: Coordinate-based hover + click
+                        if action.action_type == "click" and element_x is not None and element_y is not None:
+                            await page.mouse.move(element_x, element_y)
+                            await page.wait_for_timeout(400)
+                            await page.mouse.click(element_x, element_y)
+                        else:
+                            raise locator_err
                     
                 # Small delay after interaction to let UI respond
                 await page.wait_for_timeout(1000)

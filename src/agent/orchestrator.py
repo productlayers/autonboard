@@ -27,9 +27,15 @@ class AgentOrchestrator:
         
         page = await self.browser.start()
         
-        # Initial navigation
+        # Initial navigation — use networkidle for JS-heavy SPAs (Spotify, Notion, etc.)
         console.print(f"Navigating to {product_url}...")
-        await page.goto(product_url, wait_until="domcontentloaded")
+        try:
+            await page.goto(product_url, wait_until="networkidle", timeout=20000)
+        except Exception:
+            # Fallback: some sites never reach networkidle; domcontentloaded is enough
+            await page.goto(product_url, wait_until="domcontentloaded", timeout=15000)
+        # Extra settle time for JS frameworks to paint the initial UI
+        await asyncio.sleep(2)
         
         history = []
         rich_history = []
@@ -63,6 +69,11 @@ class AgentOrchestrator:
                 try:
                     await page.wait_for_load_state("domcontentloaded")
                     dom_state, base64_image, raw_elements, page_title = await self.observer.observe(page)
+                    # Guard: if DOM came back empty, the page is still loading — wait and retry once
+                    if not raw_elements:
+                        console.print("[yellow]DOM returned 0 elements — waiting for page to settle...[/yellow]")
+                        await asyncio.sleep(3)
+                        dom_state, base64_image, raw_elements, page_title = await self.observer.observe(page)
                 except Exception as e:
                     console.print(f"[yellow]Navigation in progress, retrying observation...[/yellow]")
                     await page.wait_for_timeout(2000)
@@ -92,6 +103,25 @@ class AgentOrchestrator:
                     recent_reasonings = [h.reasoning.strip() for h in history[-3:]]
                     if len(recent_reasonings) >= 3 and len(set(recent_reasonings)) == 1:
                         environmental_feedback += f"\n\nCRITICAL SEMANTIC LOOP: You have used the EXACT same reasoning for 3 steps in a row: '{recent_reasonings[0]}'. This proves your current strategy is not working on this page. You are strictly FORBIDDEN from repeating this action. Look at the screen again and find a new way forward."
+                    
+                    # 3. Sibling cycling detection (catches Spotify-style hover-reveal loops)
+                    # Triggers when the agent clicks 4 nearby element IDs with the same action type
+                    recent_clicks = [h for h in history[-5:] if h.action_type == "click" and h.element_id]
+                    if len(recent_clicks) >= 4:
+                        try:
+                            recent_click_ids = [int(h.element_id) for h in recent_clicks]
+                            id_range = max(recent_click_ids) - min(recent_click_ids)
+                            if id_range <= 20:  # All within 20 element IDs = same UI cluster
+                                environmental_feedback += f"\n\nCRITICAL SIBLING LOOP: You have clicked {len(recent_clicks)} elements in the same UI cluster (IDs {min(recent_click_ids)}–{max(recent_click_ids)}) with no progress. These elements are in the same row/section and none of them are working. STOP clicking siblings. Try looking for a '...' or 'More options' button, or use 'pause_for_human'."
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # 4. Ping-pong detection (catches 2-element alternation regardless of ID range)
+                    # e.g. Partiful: alternating between element 5 (title) and element 30 (Edit button)
+                    recent_click_ids_raw = [h.element_id for h in history[-6:] if h.action_type == "click" and h.element_id]
+                    if len(recent_click_ids_raw) >= 4 and len(set(recent_click_ids_raw)) == 2:
+                        a, b = list(set(recent_click_ids_raw))
+                        environmental_feedback += f"\n\nCRITICAL PING-PONG LOOP: You have been alternating between exactly 2 elements [{a}] and [{b}] with no progress. This back-and-forth is achieving nothing. Both elements are NOT behaving as expected. You MUST break the pattern entirely — try a completely different element, scroll to find another path, or use 'pause_for_human'."
                     elif len(recent_reasonings) >= 2 and recent_reasonings[-1] == recent_reasonings[-2]:
                         environmental_feedback += f"\n\nWARNING: You are repeating your reasoning from the previous step. If this action doesn't work this time, you MUST change your strategy in the next step."
                 
