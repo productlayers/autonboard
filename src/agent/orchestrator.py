@@ -43,6 +43,7 @@ class AgentOrchestrator:
         total_tokens = 0
         prev_dom_state = ""
         prev_error = ""
+        prev_element_count = 0
         
         # Store partial results on the instance so main.py can recover them on crash/interrupt
         self.partial_results = {
@@ -91,6 +92,9 @@ class AgentOrchestrator:
                     environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action failed with browser error: '{prev_error}'. The element might be hidden, blocked by a popup, or unclickable. You must try a different approach.\n"
                 elif step > 1 and dom_state == prev_dom_state:
                     environmental_feedback += "ENVIRONMENTAL FEEDBACK: Your last action had no visible effect on the page. The screen is exactly the same. You may have missed a required input, clicked a disabled button, or triggered an invisible error."
+                elif step > 1 and len(raw_elements) >= prev_element_count + 3:
+                    # Element count grew significantly — something was added to the page (e.g. a new form field in a builder)
+                    environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action ADDED content to the page — {len(raw_elements) - prev_element_count} new elements appeared. Something was successfully created or added. Check the canvas or left panel to see what changed before clicking anything else. If your target content is now visible, output \"done\"."
                 
                 # Hard loop detection (SPA-aware)
                 if len(history) >= 2:
@@ -126,6 +130,7 @@ class AgentOrchestrator:
                         environmental_feedback += f"\n\nWARNING: You are repeating your reasoning from the previous step. If this action doesn't work this time, you MUST change your strategy in the next step."
                 
                 prev_dom_state = dom_state
+                prev_element_count = len(raw_elements)
                 prev_error = "" # reset for next step
                 
                 # 2. Plan (sleep briefly to prevent Groq 429 API rate limits with large image payloads)
