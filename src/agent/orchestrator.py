@@ -112,9 +112,16 @@ class AgentOrchestrator:
                             recent_click_ids = [int(h.element_id) for h in recent_clicks]
                             id_range = max(recent_click_ids) - min(recent_click_ids)
                             if id_range <= 20:  # All within 20 element IDs = same UI cluster
-                                environmental_feedback += f"\n\nCRITICAL SIBLING LOOP: You have clicked {len(recent_clicks)} elements in the same UI cluster (IDs {min(recent_click_ids)}–{max(recent_click_ids)}) with no progress. These elements are in the same row/section and none of them are working as expected. The interaction pattern itself is broken — likely because these buttons require hovering first, or they trigger a menu you need to look for. STOP clicking siblings. Try: (1) right-clicking or long-pressing the track row, (2) looking for a '...' or 'More options' button, or (3) use 'pause_for_human'."
+                                environmental_feedback += f"\n\nCRITICAL SIBLING LOOP: You have clicked {len(recent_clicks)} elements in the same UI cluster (IDs {min(recent_click_ids)}–{max(recent_click_ids)}) with no progress. These elements are in the same row/section and none of them are working. STOP clicking siblings. Try looking for a '...' or 'More options' button, or use 'pause_for_human'."
                         except (ValueError, TypeError):
                             pass
+                    
+                    # 4. Ping-pong detection (catches 2-element alternation regardless of ID range)
+                    # e.g. Partiful: alternating between element 5 (title) and element 30 (Edit button)
+                    recent_click_ids_raw = [h.element_id for h in history[-6:] if h.action_type == "click" and h.element_id]
+                    if len(recent_click_ids_raw) >= 4 and len(set(recent_click_ids_raw)) == 2:
+                        a, b = list(set(recent_click_ids_raw))
+                        environmental_feedback += f"\n\nCRITICAL PING-PONG LOOP: You have been alternating between exactly 2 elements [{a}] and [{b}] with no progress. This back-and-forth is achieving nothing. Both elements are NOT behaving as expected. You MUST break the pattern entirely — try a completely different element, scroll to find another path, or use 'pause_for_human'."
                     elif len(recent_reasonings) >= 2 and recent_reasonings[-1] == recent_reasonings[-2]:
                         environmental_feedback += f"\n\nWARNING: You are repeating your reasoning from the previous step. If this action doesn't work this time, you MUST change your strategy in the next step."
                 

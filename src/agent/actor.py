@@ -43,7 +43,13 @@ class PlaywrightActor:
                     if action.action_type == "click":
                         await locator.click(timeout=3000, force=True)
                     elif action.action_type == "type" and action.text_to_type:
-                        await locator.fill(action.text_to_type, timeout=3000, force=True)
+                        try:
+                            await locator.fill(action.text_to_type, timeout=3000, force=True)
+                        except Exception:
+                            # Fallback for contenteditable divs (fill() only works on input/textarea)
+                            await locator.click(timeout=2000)
+                            await page.keyboard.press("Control+a")
+                            await page.keyboard.type(action.text_to_type)
                 except Exception as locator_err:
                     # Retry 1: Hover the element first (reveals hidden parent UI like Spotify's track action row)
                     # then click — this handles hover-reveal button patterns
