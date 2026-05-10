@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+
+# Env / secrets
+.env
+.env.local
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.python-version
+
+# Private notes and planning docs (never commit)
+**/PRIVATE_NOTES.md
+**/GIT_RUNBOOK.md
+docs/LEARNINGS.md
+docs/BACKLOG.md
+bff_prd_draft.md
+shared/
+
+# BFF runtime data (run logs, browser sessions, screenshots)
+data/browser_profile/
+data/runs/
+data/screenshots/
+results/

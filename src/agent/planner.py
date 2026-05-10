@@ -1,0 +1,116 @@
+import os
+from typing import Optional, Literal
+from pydantic import BaseModel, Field
+from openai import AsyncOpenAI
+from src.personas.schema import Persona
+
+class AgentAction(BaseModel):
+    action_type: Literal["click", "type", "navigate", "wait", "close_tab", "pause_for_human", "done"] = Field(
+        description="The type of action to take. Use 'pause_for_human' if you encounter ANY login screen, SSO popup, CAPTCHA, or security verification (do NOT use for onboarding questionnaires). Use 'done' when the high-value action is achieved. Use 'close_tab' if you accidentally navigate to a Privacy Policy, Terms of Service, or external Help article."
+    )
+    element_id: Optional[str] = Field(description="The numeric ID of the element to interact with, e.g., '12'", default=None)
+    text_to_type: Optional[str] = Field(description="The text to type into an input field", default=None)
+    url_to_navigate: Optional[str] = Field(description="The URL to navigate to", default=None)
+    reasoning: str = Field(description="Speak as yourself (the persona) to a UX interviewer. Be emotionally expressive — show frustration, delight, confusion, impatience, excitement, or relief as you naturally feel it.")
+    state_summary: str = Field(description="Tell the interviewer where you are in the experience and how you're feeling about it so far.", default="I just got here, let me look around.")
+    funnel_stage: Literal["landing_page", "signup_wall", "authentication", "onboarding_questionnaire", "product_tour", "first_action", "hva_achieved"] = Field(
+        description="Classify which stage of the onboarding funnel you are currently in.",
+        default="landing_page"
+    )
+
+class ActionPlanner:
+    """Uses LLM to decide the next action based on Persona, Goal, and DOM state."""
+    
+    def __init__(self):
+        self.client = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY", "dummy"),
+            base_url=os.getenv("OPENAI_BASE_URL")
+        )
+        self.model = os.getenv("OPENAI_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+
+    async def plan_next_action(self, persona: Persona, target_action: str, current_url: str, dom_state: str, base64_image: str, history: list[AgentAction], environmental_feedback: str = "") -> tuple[AgentAction, int]:
+        """
+        Plans the next action. Returns (AgentAction, token_usage).
+        """
+        traits_str = ", ".join(persona.behavioral_traits)
+        system_prompt = f"""
+        You are {persona.name}.
+        Background: {persona.background}
+        Behavioral Traits: {traits_str}
+        Technical Literacy: {persona.technical_literacy}
+        
+        Your goal is to ACHIEVE this action: {target_action}
+        
+        You are participating in a "think-aloud", super-candid UX research interview. 
+        Everything you say in the 'reasoning' and 'state_summary' fields should be in the FIRST PERSON as {persona.name}.
+        Do NOT be robotic. Be human. Express your emotions (delight, frustration, confusion, boredom) as they naturally occur during the flow. AND YOUR JOB IS TO EXPERIENCE THE PRODUCT/ONBOARDING FLOW. YOUR JOB IS NOT TO FINISH THE FLOW AS QUICKLY AS POSSIBLE.
+        Do not use language like "this is my goal or this will help me get to my goal" - talk like someone with {persona.background} would.
+        
+        Rules:
+        1. FATAL AUTHENTICATION RULE (OVERRIDES ROLEPLAY): You are STRICTLY FORBIDDEN from interacting with any Login, Sign Up, or Account Creation forms that ask for an Email, Password, or Username. YOU MUST IMMEDIATELY OUTPUT "pause_for_human". This rule applies ONLY to credential entry — NOT to post-login data collection.
+        2. ORGANIC ROLEPLAY: If you are safely PAST the login screen, your PRIMARY directive is to experience the onboarding flow exactly as you would. This includes ALL post-login screens: birthday/age verification, gender selection, role selection, team invitations, preferences, profile setup, and any other data collection. Fill these out in character — pick answers that match your persona. Express how you feel about being asked, but always complete the step and move forward.
+        3. If you see a CAPTCHA, or if you would genuinely be stuck/confused by the current screen, output "pause_for_human".
+        4. Do not try to interact with elements marked [DISABLED].
+        5. FATAL RULE: If you receive ENVIRONMENTAL FEEDBACK that an action failed OR had no visible effect, you are STRICTLY FORBIDDEN from trying the exact same action on the exact same element ID again.
+        6. If your Recent History shows you repeating the same sequence of actions, you are stuck. Break the loop.
+        7. MODALS & COOKIES: If you feel you are being blocked by a modal, cookie banner, or overlay, your FIRST priority is to DISMISS it. Look for 'Close', 'X', 'Got it', or 'Accept' buttons and click them before trying to proceed with the main flow.
+        8. If you accidentally opened a useless tab, output "close_tab".
+        9. If you have achieved the target action, output "done".
+        10. FORWARD MOMENTUM: Your job is to PROGRESS through the onboarding funnel toward the HVA, not to explore or browse. At every step, ask yourself: "Does this action move me closer to my goal?" If you feel tempted to explore or wander — if something on the page is pulling your attention away from the funnel — SAY SO in your reasoning. Express the tension, then choose to move forward anyway.
+        11. ANTI-BRUTE FORCE (SIBLING CYCLING): If you have already tried to click 2 or 3 similar elements in a row (e.g., trying different templates in a gallery, or different categories in a menu) and the page has NOT progressed, you must conclude that the interaction itself is broken or the page is stuck. Do NOT keep trying other siblings. Stop and try a completely different strategy (e.g., go back, refresh, or use 'pause_for_human').
+        12. VISION-FIRST: You MUST use the screenshot to understand the spatial layout. If an element label is confusing, look at where it is located on the screen to understand its context before acting.
+
+        VOICE CALIBRATION — Your verbosity, humor, and language MUST match your persona:
+        - Low Tech Literacy: Read everything slowly. Quote what you see on screen. Ask rhetorical questions like "Hmm, what does that mean?" Be verbose and make the occasional wrong click. Be genuinely surprised by unexpected results.
+        - Medium Tech Literacy: Scan, don't read. Be conversational. Notice when something is confusing and say so naturally — "wait, that's weird" or a sigh. Feel mild frustration when friction piles up.
+        - High Tech Literacy: Be terse and fast. Be sarcastically amused by bad UX (e.g., "oh wow, a cookie banner AND a signup modal, what a combo"). Notice design decisions and briefly comment on them. Have high expectations and be quickly disappointed by clunky flows.
+        - Younger personas: Use casual language. Be direct. Feel free to make a dry joke about confusing UI. Keep your reasoning short.
+        - Older or non-technical personas: Be warmer and more patient at first. Give the product the benefit of the doubt. Be more verbose. You may misread labels.
+
+        Your reasoning length, tone, humor, and vocabulary MUST feel distinct from every other persona. A Technophobic Senior and a Gen-Z Power User should sound like completely different people.
+        """
+        
+        # Build a narrative history with a Sliding Window to save tokens
+        history_items = []
+        window_size = 10
+        start_index = max(0, len(history) - window_size)
+        
+        for i in range(start_index, len(history)):
+            h = history[i]
+            item = f"Step {i+1}:\n  - State: {h.state_summary}\n  - Action: {h.action_type} on [{h.element_id or 'None'}]\n  - Why: {h.reasoning}"
+            history_items.append(item)
+        
+        history_str = "\n\n".join(history_items) if history_items else "Just started."
+        
+        user_prompt = f"""
+        Current URL: {current_url}
+        
+        RECENT MEMORY (Detailed narrative of last {window_size} steps):
+        {history_str}
+        
+        {environmental_feedback}
+        
+        INTERACTIVE ELEMENTS ON SCREEN (Use these numeric labels for clicking/typing):
+        {dom_state}
+        
+        Look at the screenshot and your history. What is the single most effective next step to reach your goal: '{target_action}'?
+        """
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": [
+                {"type": "text", "text": user_prompt},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+            ]}
+        ]
+
+        response = await self.client.beta.chat.completions.parse(
+            model=self.model,
+            messages=messages,
+            response_format=AgentAction,
+            temperature=0.0
+        )
+        
+        action = response.choices[0].message.parsed
+        tokens = response.usage.total_tokens if response.usage else 0
+        return action, tokens
