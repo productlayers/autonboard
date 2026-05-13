@@ -37,23 +37,26 @@ class PlaywrightActor:
                     locator = locator.first
                 
                 try:
-                    # Make sure it's attached to the DOM
-                    await locator.wait_for(state="attached", timeout=3000)
-                    
+                    # Ensure element is in view before interacting
+                    await locator.scroll_into_view_if_needed(timeout=3000)
+
                     if action.action_type == "click":
-                        await locator.click(timeout=3000, force=True)
+                        await locator.click(timeout=4000, force=True)
                     elif action.action_type == "type" and action.text_to_type:
                         try:
-                            await locator.fill(action.text_to_type, timeout=3000, force=True)
+                            await locator.fill(action.text_to_type, timeout=4000, force=True)
                         except Exception:
                             # Fallback for contenteditable divs (fill() only works on input/textarea)
                             # Double-click to enter edit mode, then type
                             try:
-                                await locator.dblclick(timeout=2000)
+                                await locator.dblclick(timeout=3000, force=True)
                             except Exception:
-                                await locator.click(timeout=2000)
-                            await page.keyboard.press("Control+a")
-                            await page.keyboard.type(action.text_to_type)
+                                await locator.click(timeout=3000, force=True)
+                            
+                            # Select all and type
+                            await page.keyboard.press("Control+a") 
+                            await page.keyboard.press("Backspace")
+                            await page.keyboard.type(action.text_to_type, delay=20)
                 except Exception as locator_err:
                     # Retry 1: Hover the element first (reveals hidden parent UI like Spotify's track action row)
                     # then click — this handles hover-reveal button patterns

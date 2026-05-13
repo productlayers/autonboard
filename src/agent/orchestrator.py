@@ -3,6 +3,7 @@ import time
 import os
 import base64
 from pathlib import Path
+from typing import Callable, Optional
 from rich.console import Console
 from src.core.browser import BrowserManager
 from src.agent.observer import DOMObserver
@@ -15,13 +16,13 @@ console = Console()
 class AgentOrchestrator:
     """The main state machine loop for the autonomous browser agent."""
     
-    def __init__(self, headless: bool = False):
-        self.browser = BrowserManager(headless=headless)
+    def __init__(self, headless: bool = False, on_pause=None):
+        self.browser = BrowserManager(headless=headless, on_pause=on_pause)
         self.observer = DOMObserver()
         self.planner = ActionPlanner()
         self.actor = PlaywrightActor()
         
-    async def run(self, persona: Persona, product_name: str, product_url: str, target_action: str, max_steps: int = 15):
+    async def run(self, persona: Persona, product_name: str, product_url: str, target_action: str, max_steps: int = 15, on_step: Optional[Callable] = None):
         """Runs the agent loop for a specific persona and product."""
         console.print(f"\n[bold magenta]Starting Run[/bold magenta] | Persona: [cyan]{persona.name}[/cyan] | Goal: [cyan]{target_action}[/cyan]")
         
@@ -205,6 +206,8 @@ class AgentOrchestrator:
                     step_dict["success"] = True
                     step_dict["latency_ms"] = int((time.time() - step_start_time) * 1000)
                     rich_history.append(step_dict)
+                    if on_step:
+                        on_step(step_dict)
                     break
                     
                 if action.action_type == "pause_for_human":
@@ -217,6 +220,8 @@ class AgentOrchestrator:
                     step_dict["success"] = True
                     step_dict["latency_ms"] = int((time.time() - step_start_time) * 1000)
                     rich_history.append(step_dict)
+                    if on_step:
+                        on_step(step_dict)
                     continue # Resume observing after human intervenes
                     
                 # 4. Act
@@ -225,6 +230,8 @@ class AgentOrchestrator:
                 step_dict["error_msg"] = error_msg
                 step_dict["latency_ms"] = int((time.time() - step_start_time) * 1000)
                 rich_history.append(step_dict)
+                if on_step:
+                    on_step(step_dict)
                 
                 if not success and action.action_type not in ["done", "pause_for_human"]:
                     console.print(f"[red]Action execution failed: {error_msg}[/red]")

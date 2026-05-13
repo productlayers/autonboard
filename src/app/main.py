@@ -11,7 +11,7 @@ from src.evals.metrics import EvalMetrics
 
 console = Console()
 
-async def run_agent(product_url: str, product_name: str, pm_hva: str, headless: bool = False):
+async def run_agent(product_url: str, product_name: str = None, pm_hva: str = "", headless: bool = False):
     # 0. Auto-Discover Product Description (lightweight httpx scrape, no browser)
     console.print("\n[bold blue]=== Phase 0: Auto-Discovering Product ===[/bold blue]")
     console.print(f"Scraping metadata from {product_url}...")
@@ -27,8 +27,31 @@ async def run_agent(product_url: str, product_name: str, pm_hva: str, headless: 
                 match = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']description["\']', text, re.IGNORECASE)
             if match:
                 product_desc = match.group(1).strip()
+            # Extract product name from og:site_name or <title> if not provided
+            if not product_name:
+                name_match = re.search(r'<meta[^>]+property=["\']og:site_name["\'][^>]+content=["\']([^"\']+)', text, re.IGNORECASE)
+                if not name_match:
+                    name_match = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:site_name["\']', text, re.IGNORECASE)
+                if name_match:
+                    product_name = name_match.group(1).strip()
+                else:
+                    # Fallback: extract from <title> (take first segment before common separators)
+                    title_match = re.search(r'<title[^>]*>([^<]+)</title>', text, re.IGNORECASE)
+                    if title_match:
+                        raw_title = title_match.group(1).strip()
+                        # Split on common separators: " - ", " | ", " — ", " · "
+                        product_name = re.split(r'\s*[\-\|\—\·]\s*', raw_title)[0].strip()
     except Exception as e:
         console.print(f"[yellow]Could not scrape metadata: {e}[/yellow]")
+    
+    # Final fallback: derive from URL hostname
+    if not product_name:
+        from urllib.parse import urlparse
+        hostname = urlparse(product_url).hostname or ""
+        # Remove www. and .com/.io/etc
+        product_name = hostname.replace("www.", "").split(".")[0].capitalize()
+    
+    console.print(f"Product Name: {product_name}")
     console.print(f"Scraped Description: {product_desc}")
 
     # 1. Generate Personas & HVA Audit
@@ -130,7 +153,7 @@ def main():
     load_dotenv()
     parser = argparse.ArgumentParser(description="Best Foot Forward - Autonomous UX Auditor")
     parser.add_argument("--url", required=True, help="Target product URL")
-    parser.add_argument("--name", required=True, help="Target product name")
+    parser.add_argument("--name", required=False, default=None, help="Target product name (auto-detected from URL if omitted)")
     parser.add_argument("--hva", required=True, help="The PM's hypothesis for the First High-Value Action")
     parser.add_argument("--headless", action="store_true", help="Run browser in headless mode")
     

@@ -33,21 +33,26 @@ class DOMObserver:
             box.style.top = (rect.top + window.scrollY) + 'px';
             box.style.width = rect.width + 'px';
             box.style.height = rect.height + 'px';
-            box.style.border = '2px solid red';
-            box.style.backgroundColor = 'rgba(255, 0, 0, 0.1)';
+            box.style.border = '1px solid rgba(99, 102, 241, 0.45)';
+            box.style.backgroundColor = 'rgba(99, 102, 241, 0.04)';
+            box.style.borderRadius = '3px';
             box.style.zIndex = '999999';
             box.style.pointerEvents = 'none'; // Don't block clicks!
             
-            // Draw ID Label
+            // Draw ID Label — small pill badge tucked in top-left corner
             const label = document.createElement('div');
             label.style.position = 'absolute';
-            label.style.top = '-15px';
-            label.style.left = '0';
-            label.style.backgroundColor = 'yellow';
-            label.style.color = 'black';
-            label.style.fontSize = '12px';
-            label.style.fontWeight = 'bold';
-            label.style.padding = '0 2px';
+            label.style.top = '-1px';
+            label.style.left = '-1px';
+            label.style.backgroundColor = 'rgba(67, 56, 202, 0.85)';
+            label.style.color = 'white';
+            label.style.fontSize = '9px';
+            label.style.fontWeight = '600';
+            label.style.fontFamily = 'monospace';
+            label.style.padding = '1px 4px';
+            label.style.borderRadius = '2px 0 2px 0';
+            label.style.lineHeight = '1.4';
+            label.style.letterSpacing = '0.02em';
             label.innerText = bffId;
             box.appendChild(label);
             
