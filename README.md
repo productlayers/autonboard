@@ -67,11 +67,19 @@ cp .env.example .env
 ```bash
 uv run python -m src.app.main \
   --url "https://www.notion.so" \
-  --name "Notion" \
   --hva "Create a new page and add a table"
 ```
+*(Note: The product name and description are now auto-discovered from the URL. You can still explicitly pass `--name "Product"` if needed.)*
 
 The browser will open, the agent will navigate the onboarding flow, and screenshots will be saved to `data/runs/screenshots/` at each step.
+
+### Visualize Results
+
+To view real-time traces, screenshots, and UX findings, run the Streamlit dashboard in a separate terminal:
+
+```bash
+uv run streamlit run dashboard.py
+```
 
 ---
 
