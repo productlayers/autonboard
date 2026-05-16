@@ -25,7 +25,7 @@ load_dotenv()
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Best Foot Forward",
-    page_icon="🦶",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -199,7 +199,7 @@ def load_past_runs() -> list:
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## 🦶 Best Foot Forward")
+    st.markdown("## 📈 Best Foot Forward")
     st.caption("Autonomous UX Auditor")
     st.divider()
 
@@ -245,7 +245,7 @@ tab_new, tab_past = st.tabs(["🚀 New Audit", "📋 Past Runs"])
 # TAB 1: New Audit
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_new:
-    st.markdown("# 🦶 Best Foot Forward")
+    st.markdown("# 📈 Best Foot Forward")
     st.markdown("##### Autonomous UX auditor powered by AI personas")
     st.markdown("")
 
@@ -414,13 +414,13 @@ with tab_new:
                 if run_results:
                     try:
                         logger = RunLogger()
-                        all_persona_names = [p.name for p in analysis.target_personas]
+                        all_personas_data = [p.model_dump() for p in analysis.target_personas]
                         logger.log_run(
                             persona_name=target_persona.name,
                             product_name=product_name,
                             target_action=pm_hva,
                             run_results=run_results,
-                            generated_personas=all_persona_names,
+                            generated_personas=all_personas_data,
                             inferred_hva=analysis.inferred_high_value_action,
                             pm_hypothesis_alignment=analysis.pm_hypothesis_alignment
                         )
