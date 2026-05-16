@@ -120,13 +120,13 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
         # 3. Log Results — ALWAYS, even for crashes
         console.print("\n[bold blue]=== Phase 3: Logging & Metrics ===[/bold blue]")
         logger = RunLogger()
-        all_persona_names = [p.name for p in analysis.target_personas]
+        all_personas_data = [p.model_dump() for p in analysis.target_personas]
         logger.log_run(
             persona_name=target_persona.name,
             product_name=product_name,
             target_action=pm_hva,
             run_results=run_results,
-            generated_personas=all_persona_names,
+            generated_personas=all_personas_data,
             inferred_hva=analysis.inferred_high_value_action,
             pm_hypothesis_alignment=analysis.pm_hypothesis_alignment
         )

@@ -15,7 +15,7 @@ class RunLogger:
         os.makedirs(self.screenshots_dir, exist_ok=True)
         self.log_file = os.path.join(self.log_dir, "runs.jsonl")
         
-    def log_run(self, persona_name: str, product_name: str, target_action: str, run_results: Dict[str, Any], generated_personas: list[str] = None, inferred_hva: str = None, pm_hypothesis_alignment: str = None):
+    def log_run(self, persona_name: str, product_name: str, target_action: str, run_results: Dict[str, Any], generated_personas: list = None, inferred_hva: str = None, pm_hypothesis_alignment: str = None):
         """Appends the run summary to the JSONL log."""
         now = datetime.now()
         run_id = now.strftime("%Y%m%d_%H%M%S")
