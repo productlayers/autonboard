@@ -1,6 +1,8 @@
-from typing import Dict, Any, Tuple
-from playwright.async_api import Page
 import base64
+from typing import Any
+
+from playwright.async_api import Page
+
 
 class DOMObserver:
     """Extracts interactive elements and an annotated screenshot for the LLM to understand."""
@@ -99,49 +101,49 @@ class DOMObserver:
     }
     """
 
-    async def observe(self, page: Page) -> Tuple[str, str, list[Dict[str, Any]], str]:
+    async def observe(self, page: Page) -> tuple[str, str, list[dict[str, Any]], str]:
         """
-        Injects IDs into the page and returns a markdown-like string 
+        Injects IDs into the page and returns a markdown-like string
         of all interactive elements, a base64 screenshot, the raw element data with coordinates,
         and the page title.
         """
         elements = await page.evaluate(self.INJECT_JS)
-        
+
         screenshot = await page.screenshot(type="jpeg", quality=80)
-        base64_image = base64.b64encode(screenshot).decode('utf-8')
-        
+        base64_image = base64.b64encode(screenshot).decode("utf-8")
+
         await page.evaluate(self.CLEANUP_JS)
-        
+
         # Extract page title
         page_title = await page.title()
-        
+
         lines = []
         for el in elements:
-            type_str = f" type='{el['type']}'" if el['type'] else ""
-            disabled_str = " [DISABLED]" if el.get('disabled') else ""
-            
+            type_str = f" type='{el['type']}'" if el["type"] else ""
+            disabled_str = " [DISABLED]" if el.get("disabled") else ""
+
             # Build a rich label that distinguishes empty inputs from filled ones
-            label = el['text']
+            label = el["text"]
             extra = []
-            
+
             # If it's an input/textarea and the visible text IS the placeholder (field is empty)
-            is_input = el['tag'] in ('input', 'textarea')
-            has_value = bool(el.get('value', '').strip())
-            placeholder = el.get('placeholder', '').strip()
-            aria_label = el.get('aria_label', '').strip()
-            
+            is_input = el["tag"] in ("input", "textarea")
+            has_value = bool(el.get("value", "").strip())
+            placeholder = el.get("placeholder", "").strip()
+            aria_label = el.get("aria_label", "").strip()
+
             if is_input and not has_value:
                 if placeholder:
                     extra.append(f'[empty, hint: "{placeholder}"]')
                 else:
-                    extra.append('[empty]')
+                    extra.append("[empty]")
             elif is_input and has_value:
                 extra.append(f'[value: "{el["value"]}"]')
-            
+
             if aria_label and aria_label != label:
                 extra.append(f'[aria: "{aria_label}"]')
-            
-            extra_str = ' ' + ' '.join(extra) if extra else ''
+
+            extra_str = " " + " ".join(extra) if extra else ""
             lines.append(f"[{el['id']}] <{el['tag']}{type_str}>{disabled_str} {label}{extra_str}")
-            
+
         return "\n".join(lines), base64_image, elements, page_title

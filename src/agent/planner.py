@@ -1,44 +1,125 @@
 import os
-from typing import Optional, Literal
-from pydantic import BaseModel, Field
+from collections import defaultdict
+from typing import Literal
+
 from openai import AsyncOpenAI
+from pydantic import BaseModel, Field
+
+from src.memory.atoms import find_atoms
 from src.personas.schema import Persona
+
 
 class AgentAction(BaseModel):
     action_type: Literal["click", "type", "navigate", "wait", "close_tab", "pause_for_human", "done"] = Field(
         description="The type of action to take. Use 'pause_for_human' if you encounter ANY login screen, SSO popup, CAPTCHA, or security verification (do NOT use for onboarding questionnaires). Use 'done' when the high-value action is achieved. Use 'close_tab' if you accidentally navigate to a Privacy Policy, Terms of Service, or external Help article."
     )
-    element_id: Optional[str] = Field(description="The numeric ID of the element to interact with, e.g., '12'", default=None)
-    text_to_type: Optional[str] = Field(description="The text to type into an input field", default=None)
-    url_to_navigate: Optional[str] = Field(description="The URL to navigate to", default=None)
-    reasoning: str = Field(description="Speak as yourself (the persona) to a UX interviewer. Be emotionally expressive — show frustration, delight, confusion, impatience, excitement, or relief as you naturally feel it.")
-    state_summary: str = Field(description="Tell the interviewer where you are in the experience and how you're feeling about it so far.", default="I just got here, let me look around.")
-    funnel_stage: Literal["landing_page", "signup_wall", "authentication", "onboarding_questionnaire", "product_tour", "first_action", "hva_achieved"] = Field(
-        description="Classify which stage of the onboarding funnel you are currently in.",
-        default="landing_page"
+    element_id: str | None = Field(
+        description="The numeric ID of the element to interact with, e.g., '12'", default=None
     )
+    text_to_type: str | None = Field(description="The text to type into an input field", default=None)
+    url_to_navigate: str | None = Field(description="The URL to navigate to", default=None)
+    reasoning: str = Field(
+        description="Speak as yourself (the persona) to a UX interviewer. Be emotionally expressive — show frustration, delight, confusion, impatience, excitement, or relief as you naturally feel it."
+    )
+    state_summary: str = Field(
+        description="Tell the interviewer where you are in the experience and how you're feeling about it so far.",
+        default="I just got here, let me look around.",
+    )
+    funnel_stage: Literal[
+        "landing_page",
+        "signup_wall",
+        "authentication",
+        "onboarding_questionnaire",
+        "product_tour",
+        "first_action",
+        "hva_achieved",
+    ] = Field(description="Classify which stage of the onboarding funnel you are currently in.", default="landing_page")
+
+
+_FUNNEL_STAGE_ORDER = [
+    "landing_page",
+    "signup_wall",
+    "authentication",
+    "onboarding_questionnaire",
+    "product_tour",
+    "first_action",
+    "hva_achieved",
+]
+
 
 class ActionPlanner:
     """Uses LLM to decide the next action based on Persona, Goal, and DOM state."""
-    
+
     def __init__(self):
-        self.client = AsyncOpenAI(
-            api_key=os.getenv("OPENAI_API_KEY", "dummy"),
-            base_url=os.getenv("OPENAI_BASE_URL")
-        )
+        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"), base_url=os.getenv("OPENAI_BASE_URL"))
         self.model = os.getenv("OPENAI_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 
-    async def plan_next_action(self, persona: Persona, target_action: str, current_url: str, dom_state: str, base64_image: str, history: list[AgentAction], environmental_feedback: str = "") -> tuple[AgentAction, int]:
+    def _build_memory_block(self, persona: Persona) -> str:
+        """
+        Retrieve L1 atoms for this archetype and render them as a 'PRIOR
+        OBSERVATIONS' section. Returns empty string if persona has no archetype_id
+        or no atoms exist yet.
+
+        Atoms are not instructions — they are deep characterization of how this
+        persona TYPE has behaved before. The framing tells the model to embody
+        them, not follow them.
+
+        Note: re-reads atoms.jsonl every plan call. At hackathon scale this is
+        cheap; cache per-run when atom counts grow.
+        """
+        if not persona.archetype_id:
+            return ""
+        atoms = find_atoms(archetype_id=persona.archetype_id, limit=12)
+        if not atoms:
+            return ""
+
+        by_stage: dict[str, list] = defaultdict(list)
+        for atom in atoms:
+            by_stage[atom.funnel_stage].append(atom)
+
+        ordered_stages = sorted(
+            by_stage.keys(),
+            key=lambda s: _FUNNEL_STAGE_ORDER.index(s) if s in _FUNNEL_STAGE_ORDER else 99,
+        )
+
+        lines: list[str] = []
+        for stage in ordered_stages:
+            lines.append(f"[{stage}]")
+            for atom in by_stage[stage]:
+                lines.append(f"  - ({atom.atom_type}) {atom.observation}")
+
+        body = "\n".join(lines)
+        return (
+            f"\nPRIOR OBSERVATIONS — how a {persona.name} has actually behaved "
+            f"in past audits ({len(atoms)} observations across {len(by_stage)} stages):\n"
+            f"{body}\n\n"
+            "These are NOT instructions. They are HOW YOU BEHAVE — deep "
+            "characterization of yourself. Express the same hesitations, voice "
+            "patterns, and emotional reactions as they naturally arise. Build on "
+            "them; don't contradict them.\n"
+        )
+
+    async def plan_next_action(
+        self,
+        persona: Persona,
+        target_action: str,
+        current_url: str,
+        dom_state: str,
+        base64_image: str,
+        history: list[AgentAction],
+        environmental_feedback: str = "",
+    ) -> tuple[AgentAction, int]:
         """
         Plans the next action. Returns (AgentAction, token_usage).
         """
         traits_str = ", ".join(persona.behavioral_traits)
+        memory_block = self._build_memory_block(persona)
         system_prompt = f"""
         You are {persona.name}.
         Background: {persona.background}
         Behavioral Traits: {traits_str}
         Technical Literacy: {persona.technical_literacy}
-        
+        {memory_block}
         Your goal is to ACHIEVE this action: {target_action}
         
         You are participating in a "think-aloud", super-candid UX research interview. 
@@ -70,19 +151,19 @@ class ActionPlanner:
 
         Your reasoning length, tone, humor, and vocabulary MUST feel distinct from every other persona. A Technophobic Senior and a Gen-Z Power User should sound like completely different people.
         """
-        
+
         # Build a narrative history with a Sliding Window to save tokens
         history_items = []
         window_size = 10
         start_index = max(0, len(history) - window_size)
-        
+
         for i in range(start_index, len(history)):
             h = history[i]
-            item = f"Step {i+1}:\n  - State: {h.state_summary}\n  - Action: {h.action_type} on [{h.element_id or 'None'}]\n  - Why: {h.reasoning}"
+            item = f"Step {i + 1}:\n  - State: {h.state_summary}\n  - Action: {h.action_type} on [{h.element_id or 'None'}]\n  - Why: {h.reasoning}"
             history_items.append(item)
-        
+
         history_str = "\n\n".join(history_items) if history_items else "Just started."
-        
+
         user_prompt = f"""
         Current URL: {current_url}
         
@@ -99,19 +180,21 @@ class ActionPlanner:
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": [
-                {"type": "text", "text": user_prompt},
-                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-            ]}
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}},
+                ],
+            },
         ]
 
         response = await self.client.beta.chat.completions.parse(
-            model=self.model,
-            messages=messages,
-            response_format=AgentAction,
-            temperature=0.0
+            model=self.model, messages=messages, response_format=AgentAction, temperature=0.0
         )
-        
+
         action = response.choices[0].message.parsed
+        if action is None:
+            raise RuntimeError("LLM returned no parsed AgentAction")
         tokens = response.usage.total_tokens if response.usage else 0
         return action, tokens
