@@ -13,3 +13,42 @@ dependencies = [
     "rich>=15.0.0",
     "streamlit>=1.45.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8.0",
+    "pyright>=1.1.390",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+exclude = ["data", ".venv"]
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes (catches NameError-style bugs),
+# I: isort, B: bugbear, UP: pyupgrade, SIM: simplify
+select = ["E", "W", "F", "I", "B", "UP", "SIM"]
+ignore = [
+    "E501",  # line-too-long — handled by formatter
+    "B008",  # function calls in argument defaults — common in FastAPI/Streamlit
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Files with embedded JS/CSS/HTML in triple-string literals — formatter can't
+# touch whitespace inside string contents, so silence W291/W293 for them.
+"dashboard.py" = ["E402", "W291", "W293"]
+"src/agent/observer.py" = ["W291", "W293"]
+"src/agent/planner.py" = ["W291", "W293"]
+"src/core/browser.py" = ["W291", "W293"]
+
+[tool.pyright]
+include = ["src", "dashboard.py", "main.py"]
+exclude = ["data", ".venv", "**/__pycache__"]
+pythonVersion = "3.12"
+typeCheckingMode = "basic"
+reportPossiblyUnboundVariable = "error"
+reportGeneralTypeIssues = "warning"
+# Module resolution depends on the active venv; don't fail the type check
+# when pyright is run outside `uv run` (e.g. ad-hoc).
+reportMissingImports = "warning"

@@ -108,6 +108,25 @@ Add a `--mode directed|exploratory` CLI flag:
 
 ---
 
+## Tier 1 — Scroll Action Support
+
+**Problem:** The agent currently has no `scroll` action type. The observer only captures interactive elements visible in the viewport, and the planner can only click, type, navigate, or pause. On pages with below-the-fold content (long onboarding questionnaires, cookie banners pushing content down, infinite-scroll listings), the agent cannot discover or interact with elements it can't see — likely contributing to loops where it repeatedly clicks the same visible elements.
+
+**Proposed Changes:**
+
+| Component | Change |
+|---|---|
+| `planner.py` | Add `"scroll"` to the `action_type` Literal. Add a `scroll_direction` field (`"up"` \| `"down"`) to `AgentAction`. Add a planner rule: *"If you cannot see the element you need, or suspect there is more content below, use scroll."* |
+| `actor.py` | Handle `scroll` action by calling `page.mouse.wheel(0, delta_y)` or `page.evaluate('window.scrollBy(0, 500)')`. |
+| `observer.py` | After scrolling, re-inject SoM labels so the new viewport elements get `bff-id` tags and bounding boxes. |
+| `orchestrator.py` | No special loop-detection changes needed — existing anti-repeat rules apply. |
+
+**Why Tier 1:** The ApartmentList run showed the agent stuck on quiz screens where the "Next" button may have been below the fold or obscured. Scroll support directly addresses a class of loops that no amount of prompt engineering can fix.
+
+**Files:** `src/agent/planner.py`, `src/agent/actor.py`, `src/agent/observer.py`
+
+---
+
 ## Tier 2 — Enhanced Telemetry Fields
 
 ### `question_asked`

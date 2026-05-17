@@ -1,14 +1,16 @@
-import asyncio
-from typing import Optional
 from playwright.async_api import Page
+
 from src.agent.planner import AgentAction
+
 
 class PlaywrightActor:
     """Executes the planned AgentAction using Playwright."""
-    
-    async def execute(self, page: Page, action: AgentAction, element_x: Optional[int] = None, element_y: Optional[int] = None) -> tuple[bool, str]:
+
+    async def execute(
+        self, page: Page, action: AgentAction, element_x: int | None = None, element_y: int | None = None
+    ) -> tuple[bool, str]:
         """
-        Executes the action on the page. 
+        Executes the action on the page.
         Accepts optional (x, y) coordinates for coordinate-based fallback when DOM locators fail.
         Returns (True, "") if successful, (False, error_message) if it failed.
         """
@@ -16,7 +18,7 @@ class PlaywrightActor:
             if action.action_type == "navigate" and action.url_to_navigate:
                 await page.goto(action.url_to_navigate, wait_until="domcontentloaded", timeout=10000)
                 return True, ""
-                
+
             elif action.action_type == "close_tab":
                 try:
                     await page.close()
@@ -27,15 +29,15 @@ class PlaywrightActor:
             elif action.action_type == "wait":
                 await page.wait_for_timeout(3000)
                 return True, ""
-                
+
             elif action.action_type in ["click", "type"] and action.element_id:
                 # Select the element by the custom bff-id attribute we injected
                 locator = page.locator(f'[bff-id="{action.element_id}"]')
-                
+
                 # If multiple elements match (e.g., SPA duplicate rendering), use the first visible one
                 if await locator.count() > 1:
                     locator = locator.first
-                
+
                 try:
                     # Ensure element is in view before interacting
                     await locator.scroll_into_view_if_needed(timeout=3000)
@@ -52,9 +54,9 @@ class PlaywrightActor:
                                 await locator.dblclick(timeout=3000, force=True)
                             except Exception:
                                 await locator.click(timeout=3000, force=True)
-                            
+
                             # Select all and type
-                            await page.keyboard.press("Control+a") 
+                            await page.keyboard.press("Control+a")
                             await page.keyboard.press("Backspace")
                             await page.keyboard.type(action.text_to_type, delay=20)
                 except Exception as locator_err:
@@ -74,14 +76,14 @@ class PlaywrightActor:
                             await page.wait_for_timeout(400)
                             await page.mouse.click(element_x, element_y)
                         else:
-                            raise locator_err
-                    
+                            raise locator_err from None
+
                 # Small delay after interaction to let UI respond
                 await page.wait_for_timeout(1000)
                 return True, ""
-                
+
             return False, "Invalid action type or missing parameters"
-            
+
         except Exception as e:
-            error_str = str(e).split('\n')[0] # Keep it brief
+            error_str = str(e).split("\n")[0]  # Keep it brief
             return False, error_str
