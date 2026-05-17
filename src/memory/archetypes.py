@@ -69,6 +69,8 @@ class _SelectionResult(BaseModel):
 
 def load_archetypes(path: Path = ARCHETYPES_PATH) -> list[Archetype]:
     """Load every archetype from the JSONL library."""
+    if not path.exists():
+        return []
     out: list[Archetype] = []
     with open(path) as f:
         for line in f:
