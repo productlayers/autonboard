@@ -14,7 +14,6 @@ class RunLogger:
         self.screenshots_dir = os.path.join(self.log_dir, "screenshots")
         os.makedirs(self.screenshots_dir, exist_ok=True)
         self.log_file = os.path.join(self.log_dir, "runs.jsonl")
-
     def log_run(
         self,
         persona_name: str,
