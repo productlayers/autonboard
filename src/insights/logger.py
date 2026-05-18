@@ -23,7 +23,6 @@ class RunLogger:
         generated_personas: list | None = None,
         inferred_hva: str | None = None,
         pm_hypothesis_alignment: str | None = None,
-        persona_archetype_id: str | None = None,
     ) -> str:
         """Appends the run summary to the JSONL log. Returns the run_id."""
         now = datetime.now()
@@ -54,7 +53,6 @@ class RunLogger:
             "timestamp": now.isoformat(),
             "product": product_name,
             "persona": persona_name,
-            "persona_archetype_id": persona_archetype_id,
             "generated_personas": generated_personas or [],
             "target_action": target_action,
             "llm_inferred_hva": inferred_hva,

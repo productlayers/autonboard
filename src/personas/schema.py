@@ -2,10 +2,6 @@ from pydantic import BaseModel, Field
 
 
 class Persona(BaseModel):
-    archetype_id: str | None = Field(
-        default=None,
-        description="Stable archetype_id this persona was specialized from (e.g. 'non_tech_parent_low'). Copy from the input archetype EXACTLY. None for legacy runs.",
-    )
     name: str = Field(
         description="A short, descriptive name for the persona, e.g., 'Non-technical Small Business Owner'"
     )

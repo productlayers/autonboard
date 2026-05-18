@@ -1,20 +1,16 @@
 """
-L1 atoms — atomic persona-behavior observations.
+L1 atoms — atomic agent-behavior observations.
 
-Each atom captures one durable observation about how a specific persona archetype
-behaved during onboarding, generalized enough to apply to future runs of the
-same archetype on different products.
+Each atom captures one durable observation about how the agent navigated UI, 
+handled friction, or escaped loops, generalized enough to apply to future runs 
+across all products. This is the agent's global functional memory.
 
-Layered above the L0 run trace (runs.jsonl), atoms are the unit the L2 patterns
-and L3 archetype profile will aggregate from in later iterations.
-
-Backing store: JSONL at data/memory/atoms.jsonl. Swappable for sqlite + sqlite-vec
-once retrieval needs hybrid BM25+embedding (step 4).
+Backing store: JSONL at data/memory/atoms.jsonl.
 
 Public API:
     write_atoms(atoms)                                     # append
     load_atoms()                                           # full scan
-    find_atoms(archetype_id=, funnel_stage=, atom_type=)   # filtered scan
+    find_atoms(funnel_stage=, atom_type=)                  # filtered scan
     new_atom_id()                                          # short uuid
     now_iso()                                              # utc timestamp
 """
@@ -33,24 +29,20 @@ ATOMS_PATH = Path("data/memory/atoms.jsonl")
 # ── Schema ───────────────────────────────────────────────────────────────────
 
 AtomType = Literal[
-    "behavior_observation",  # how this archetype acted at a stage
-    "friction_response",  # how this archetype reacted to friction (emotionally)
-    "voice_in_character",  # a confirmed voice-marker pattern from the archetype
-    "voice_slip",  # moment the agent drifted out of character
+    "ui_navigation_tactic",  # e.g. how to handle dropdowns
+    "friction_resolution",   # e.g. how the agent recovered from an error
+    "anti_loop_tactic",      # e.g. what to do when clicking fails repeatedly
 ]
 
 
 class AppliesTo(BaseModel):
     """Retrieval filters. Empty list = no filter on that dimension."""
-
-    tech_literacy: list[str] = Field(default_factory=list)
     funnel_stage: list[str] = Field(default_factory=list)
     product_category: list[str] = Field(default_factory=list)
 
 
 class ResultRef(BaseModel):
     """Drill-down pointer back to the L0 trace step that produced this atom."""
-
     run_id: str
     step: int
     screenshot_path: str | None = None
@@ -58,11 +50,10 @@ class ResultRef(BaseModel):
 
 class Atom(BaseModel):
     id: str
-    archetype_id: str
     atom_type: AtomType
     funnel_stage: str
     observation: str = Field(
-        description="One sentence in plain text: what this persona did or said at this stage, generalized to apply to future similar moments."
+        description="One sentence in plain text: what the agent learned tactically at this stage, generalized to apply to future similar moments."
     )
     result_ref: ResultRef
     applies_to: AppliesTo
@@ -111,7 +102,6 @@ def load_atoms(path: Path = ATOMS_PATH) -> list[Atom]:
 
 
 def find_atoms(
-    archetype_id: str | None = None,
     funnel_stage: str | None = None,
     atom_type: AtomType | None = None,
     limit: int | None = None,
@@ -119,15 +109,10 @@ def find_atoms(
     path: Path = ATOMS_PATH,
 ) -> list[Atom]:
     """
-    Simple linear-scan retrieval. Sufficient at hackathon scale; swap for hybrid
-    BM25 + sqlite-vec once the atom count grows past a few hundred.
-
-    Ordering: by created_at, most recent first by default — fresh observations
-    out-weigh old ones until we have a real confidence/decay system.
+    Simple linear-scan retrieval.
+    Ordering: by created_at, most recent first by default.
     """
     atoms = load_atoms(path)
-    if archetype_id is not None:
-        atoms = [a for a in atoms if a.archetype_id == archetype_id]
     if funnel_stage is not None:
         atoms = [a for a in atoms if a.funnel_stage == funnel_stage]
     if atom_type is not None:

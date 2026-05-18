@@ -873,7 +873,7 @@ with tab_new:
                         st.warning(f"Run completed but logging failed: {log_err}")
 
                 # Phase 3.5: Reflection — extract L1 atoms + insights. Best effort.
-                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0 and getattr(target_persona, "archetype_id", None):
+                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0:
                     with st.status("🪞 Reflecting on the audit...", expanded=False) as reflect_status:
                         try:
                             async def do_reflect():

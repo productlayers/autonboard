@@ -42,7 +42,7 @@ class _AtomCandidate(BaseModel):
     atom_type: AtomType
     funnel_stage: str = Field(description="The funnel stage label this atom is rooted in (e.g. 'signup_wall').")
     observation: str = Field(
-        description="One sentence in plain text. Generalize so the lesson applies to FUTURE runs of this archetype on OTHER products. Not 'clicked element 13 on Zillow' but 'When a Cautious Senior sees a search field, they type a generic city name they already know.'"
+        description="One sentence in plain text. Generalize so the lesson applies to FUTURE runs across DIFFERENT products. Not 'clicked element 13 on Zillow' but 'When a dropdown closes immediately after opening, click the parent div rather than the select element.'"
     )
     step: int = Field(description="Step number from the trace this observation is rooted in. Required for drill-down.")
 
@@ -57,13 +57,13 @@ class _FrictionEvent(BaseModel):
 
 class ReflectionResult(BaseModel):
     atom_candidates: list[_AtomCandidate] = Field(
-        description="2-5 atoms capturing how THIS archetype behaved during THIS run. Be selective — only durable, generalizable observations.",
+        description="2-5 atoms capturing tactical agent learnings during THIS run. Be selective — only durable, generalizable observations.",
     )
     friction_events: list[_FrictionEvent] = Field(
         description="Discrete moments where the persona, in character, genuinely struggled or was emotionally negative. Empty list if the run was smooth.",
     )
     persona_lens_summary: str = Field(
-        description="One paragraph: what did THIS archetype's lens reveal about this product that a different archetype would not have surfaced?",
+        description="One paragraph: what did THIS specific persona's lens reveal about this product that a different persona would not have surfaced?",
     )
 
 
@@ -121,13 +121,12 @@ class AuditReflector:
         )
 
         user_prompt = f"""
-You are a UX researcher reviewing a recorded onboarding audit.
+You are a UX researcher and AI Agent trainer reviewing a recorded onboarding audit.
 
 PRODUCT: {product_name}
 TARGET ACTION (PM's hypothesized HVA): {target_action}
 
 PERSONA RUNNING THE AUDIT:
-  archetype_id: {persona.archetype_id}
   name: {persona.name}
   technical_literacy: {persona.technical_literacy}
   background: {persona.background}
@@ -142,19 +141,18 @@ TRACE:
 
 Your tasks:
 
-1. atom_candidates (2-5 items) — Extract durable persona-behavior observations to write to memory. Each atom must be:
-   - GENERALIZABLE: about how this archetype ({persona.archetype_id}) behaves in general, not specific to {product_name}. Use phrasing like "When [archetype] encounters X, they tend to..." rather than "On {product_name}, the agent did Y."
+1. atom_candidates (2-5 items) — Extract durable tactical learnings for the autonomous agent to write to its functional memory. Each atom must be:
+   - GENERALIZABLE: about how this autonomous agent navigates complex UI or handles web elements in general, not specific to {product_name}.
    - Rooted in a specific step (set the step field).
    - Categorized:
-     • "voice_in_character" — a confirmed phrase, tone, verbosity, or humor pattern that matches this archetype's voice_markers (use when the persona was clearly in character).
-     • "voice_slip" — the agent went out of character (e.g., a Low-literacy persona using jargon, a Gen-Z persona being verbose and formal).
-     • "behavior_observation" — typical action/decision pattern at a stage.
-     • "friction_response" — how this persona reacted emotionally to a moment of friction.
-   - Be SELECTIVE. 2-5 atoms total, only the most durable. A run with no notable persona-behavior observations should return fewer atoms, even zero.
+     • "ui_navigation_tactic" — how to handle specific tricky UI elements like dropdowns, hovers, or hidden inputs.
+     • "friction_resolution" — how the agent successfully recovered from an error or roadblock.
+     • "anti_loop_tactic" — what to do when clicking fails repeatedly or the DOM doesn't update.
+   - Be SELECTIVE. 2-5 atoms total. If the agent learned nothing new tactically, return an empty list.
 
-2. friction_events — Identify discrete moments where the persona, in character, genuinely struggled or was emotionally negative. Be CONSERVATIVE — do not invent friction. If the run was smooth, return an empty list.
+2. friction_events — Identify discrete moments where the persona, in character, genuinely struggled or was emotionally negative about the product. Be CONSERVATIVE — do not invent friction.
 
-3. persona_lens_summary — One paragraph. What did running the audit AS {persona.archetype_id} reveal about {product_name} that a different archetype would NOT have surfaced? Focus on the unique perspective, not generic UX observations.
+3. persona_lens_summary — One paragraph. What did running the audit AS THIS SPECIFIC PERSONA reveal about {product_name} that a different generic persona would NOT have surfaced?
 
 Output strict JSON matching the schema.
 """
@@ -164,7 +162,7 @@ Output strict JSON matching the schema.
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a UX researcher extracting durable persona-behavior atoms from an audit trace. Output valid JSON matching the schema.",
+                    "content": "You are a UX researcher extracting durable functional agent atoms from an audit trace. Output valid JSON matching the schema.",
                 },
                 {"role": "user", "content": user_prompt},
             ],
@@ -180,9 +178,6 @@ Output strict JSON matching the schema.
         run_results: dict,
     ) -> list[Atom]:
         """Convert LLM candidate atoms into stored Atoms with provenance + applies_to filters."""
-        if persona.archetype_id is None:
-            return []  # untagged runs are not used to compound memory
-
         history = run_results.get("history", [])
         steps_by_num = {h.get("step"): h for h in history}
 
@@ -192,7 +187,6 @@ Output strict JSON matching the schema.
             out.append(
                 Atom(
                     id=new_atom_id(),
-                    archetype_id=persona.archetype_id,
                     atom_type=cand.atom_type,
                     funnel_stage=cand.funnel_stage,
                     observation=cand.observation,
@@ -202,7 +196,6 @@ Output strict JSON matching the schema.
                         screenshot_path=step_data.get("screenshot_path"),
                     ),
                     applies_to=AppliesTo(
-                        tech_literacy=[persona.technical_literacy],
                         funnel_stage=[cand.funnel_stage],
                     ),
                     created_at=now_iso(),
@@ -226,7 +219,6 @@ Output strict JSON matching the schema.
         record = {
             "run_id": run_id,
             "product": product_name,
-            "archetype_id": persona.archetype_id,
             "persona_name": persona.name,
             "target_action": target_action,
             "run_status": run_results.get("status"),
