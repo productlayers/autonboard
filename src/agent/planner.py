@@ -10,14 +10,17 @@ from src.personas.schema import Persona
 
 
 class AgentAction(BaseModel):
-    action_type: Literal["click", "type", "navigate", "wait", "close_tab", "pause_for_human", "done"] = Field(
-        description="The type of action to take. Use 'pause_for_human' if you encounter ANY login screen, SSO popup, CAPTCHA, or security verification (do NOT use for onboarding questionnaires). Use 'done' when the high-value action is achieved. Use 'close_tab' if you accidentally navigate to a Privacy Policy, Terms of Service, or external Help article."
+    action_type: Literal["click", "type", "navigate", "wait", "close_tab", "pause_for_human", "scroll", "done"] = Field(
+        description="The type of action to take. Use 'scroll' to scroll up or down. Use 'pause_for_human' if you encounter ANY login screen, SSO popup, CAPTCHA, or security verification (do NOT use for onboarding questionnaires). Use 'done' when the high-value action is achieved. Use 'close_tab' if you accidentally navigate to a Privacy Policy, Terms of Service, or external Help article."
     )
     element_id: str | None = Field(
         description="The numeric ID of the element to interact with, e.g., '12'", default=None
     )
     text_to_type: str | None = Field(description="The text to type into an input field", default=None)
     url_to_navigate: str | None = Field(description="The URL to navigate to", default=None)
+    scroll_direction: Literal["up", "down"] | None = Field(
+        description="The direction to scroll if action_type is 'scroll'", default=None
+    )
     reasoning: str = Field(
         description="Speak as yourself (the persona) to a UX interviewer. Be emotionally expressive — show frustration, delight, confusion, impatience, excitement, or relief as you naturally feel it."
     )
@@ -141,6 +144,7 @@ class ActionPlanner:
         11. ANTI-BRUTE FORCE (SIBLING CYCLING): If you have already tried to click 2 or 3 similar elements in a row (e.g., trying different templates in a gallery, or different categories in a menu) and the page has NOT progressed, you must conclude that the interaction itself is broken or the page is stuck. Do NOT keep trying other siblings. Stop and try a completely different strategy (e.g., go back, refresh, or use 'pause_for_human').
         12. VISION-FIRST: You MUST use the screenshot to understand the spatial layout. If an element label is confusing, look at where it is located on the screen to understand its context before acting.
         13. BUILDER AWARENESS: If you are in a form builder, page editor, or content creator (any tool with a left panel/canvas and a right panel of options), follow this rule: After clicking anything in the right-side panel, LOOK at the left panel or central canvas to see if something was added. If your target content is now visible in the canvas or left panel, output "done" immediately — do NOT keep clicking the same right-panel options. The right panel stays open even after success, so staying focused on it will make you loop forever.
+        14. SCROLLING (LAST RESORT): Only use the 'scroll' action if you are absolutely certain there are no visible elements on the screen that move you toward your goal. If you suspect a required 'Next' button is hidden below the fold, scroll down. Do NOT scroll to randomly explore.
 
         VOICE CALIBRATION — Your verbosity, humor, and language MUST match your persona:
         - Low Tech Literacy: Read everything slowly. Quote what you see on screen. Ask rhetorical questions like "Hmm, what does that mean?" Be verbose and make the occasional wrong click. Be genuinely surprised by unexpected results.

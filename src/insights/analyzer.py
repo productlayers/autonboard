@@ -117,6 +117,7 @@ Your report will be read by the VP of Product, the Head of Design, and the growt
 4. EVIDENCE-BASED — Reference specific steps, element labels, and user reasoning to support every claim.
 5. ALWAYS RECOMMEND — Even if the onboarding was flawless, you MUST provide at least 2 recommendations and 3 next steps. For strong flows, suggest optimizations (reduce steps, improve copy, A/B tests), cross-persona risks ("this worked for a tech-savvy user, but would a non-technical user survive step 4?"), or retention improvements ("add a progress indicator to the quiz to reduce perceived effort").
 6. NEXT STEPS — End with concrete next steps the product team should take. These are tasks they can assign in their project tracker — specific, scoped, and actionable.
+7. AUTHENTICATION IS NOT A FLAW — Requiring a user to sign up or log in is standard business practice. Do NOT treat the mere existence of a signup wall or authentication step as a negative observation or "UX Friction" unless the flow itself is broken or unusually difficult.
 
 Write as if you are presenting findings to the product team in a design review."""
 
@@ -126,7 +127,7 @@ TARGET HVA: {run_data.get('target_action', 'Unknown')}
 RUN OUTCOME: {run_data.get('status', 'Unknown')}
 FAILURE REASON: {run_data.get('failure_reason', 'N/A')}
 TOTAL STEPS: {len(history)}
-FRICTION EVENTS (pauses for human help): {sum(1 for s in history if s.get('action_type') == 'pause_for_human')}
+FRICTION EVENTS: {run_data.get('friction_events', 0)}
 
 --- PERSONA PROFILE ---
 {persona_details if persona_details else f"Persona: {persona_name}"}

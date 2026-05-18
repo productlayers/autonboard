@@ -1,3 +1,5 @@
+import asyncio
+
 from playwright.async_api import BrowserContext, Page, async_playwright
 from rich.console import Console
 
@@ -89,31 +91,46 @@ class BrowserManager:
         if self.on_pause:
             await self.on_pause(reason)
 
-        # Inject a modal overlay into the visible browser window
+        # Inject a non-blocking top banner and block Python until the human
+        # clicks "Resume Agent". Page navigations (SSO redirects, form submits)
+        # destroy injected DOM, so we re-inject the banner after each navigation
+        # and keep blocking until the user explicitly clicks Resume.
         safe_reason = reason.replace("'", "\\'").replace('"', '\\"').replace("\n", " ")
-        await page.evaluate(f"""
-            (() => {{
-                const existing = document.getElementById('bff-pause-overlay');
-                if (existing) existing.remove();
-                const overlay = document.createElement('div');
-                overlay.id = 'bff-pause-overlay';
-                overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;';
-                overlay.innerHTML = `
-                    <div style="background:white;padding:2rem;border-radius:12px;text-align:center;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
-                        <div style="font-size:2.5rem;margin-bottom:0.75rem;">⚠️</div>
-                        <h2 style="margin:0 0 0.75rem;color:#1e1e2e;font-size:1.25rem;">Agent Paused — Action Required</h2>
-                        <p style="color:#6b7280;margin:0 0 1.5rem;line-height:1.5;font-size:0.95rem;">{safe_reason}</p>
-                        <button id="bff-resume-btn" style="padding:0.75rem 2rem;background:#4338CA;color:white;border:none;border-radius:8px;font-size:1rem;cursor:pointer;font-weight:600;box-shadow:0 4px 12px rgba(67,56,202,0.4);">✅ Done — Resume Agent</button>
-                    </div>`;
-                document.body.appendChild(overlay);
-            }})()
-        """)
+        while True:
+            try:
+                page = self.page  # may have changed due to tab switches
+                if page is None or page.is_closed():
+                    await asyncio.sleep(2)
+                    continue
 
-        # Block here until the user clicks the resume button IN THE BROWSER
-        await page.click("#bff-resume-btn", timeout=0)  # timeout=0 = wait forever
+                await page.evaluate(f"""
+                    () => new Promise((resolve) => {{
+                        const existing = document.getElementById('bff-pause-overlay');
+                        if (existing) existing.remove();
 
-        # Remove the overlay
-        await page.evaluate("document.getElementById('bff-pause-overlay')?.remove()")
+                        const banner = document.createElement('div');
+                        banner.id = 'bff-pause-overlay';
+                        banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:linear-gradient(135deg,#4338CA,#6366F1);z-index:2147483647;display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1.2rem;font-family:system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);gap:1rem;';
+                        banner.innerHTML = `
+                            <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
+                                <span style="font-size:1.2rem;flex-shrink:0;">⚠️</span>
+                                <span style="color:white;font-size:0.85rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_reason}</span>
+                            </div>
+                            <button id="bff-resume-btn" style="padding:0.45rem 1.2rem;background:white;color:#4338CA;border:none;border-radius:6px;font-size:0.85rem;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;">✅ Resume Agent</button>
+                        `;
+                        document.body.appendChild(banner);
+
+                        document.getElementById('bff-resume-btn').addEventListener('click', () => {{
+                            banner.remove();
+                            resolve();
+                        }});
+                    }})
+                """)
+                break  # Promise resolved — user clicked Resume
+            except Exception:
+                # Page navigated (e.g., SSO redirect), destroying the banner.
+                # Wait for the new page to settle, then re-inject.
+                await asyncio.sleep(3)
         console.print("[bold green]▶ Resuming agent execution...[/bold green]\n")
 
     async def stop(self) -> None:
