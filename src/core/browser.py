@@ -21,12 +21,19 @@ class BrowserManager:
         """Starts a persistent browser context and returns a new page."""
         self._playwright = await async_playwright().start()
 
-        # Launch persistent context
-        # This stores cookies, local storage, etc. in user_data_dir
-        self.context = await self._playwright.chromium.launch_persistent_context(
-            user_data_dir=self.user_data_dir,
+        # Launch a fresh, ephemeral browser instance (no stored credentials)
+        self._browser = await self._playwright.chromium.launch(
             headless=self.headless,
             channel="chrome",  # Use standard Chrome for better Google SSO compatibility
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+                "--disable-site-isolation-trials",
+            ],
+            ignore_default_args=["--enable-automation"],
+        )
+        
+        self.context = await self._browser.new_context(
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -34,12 +41,6 @@ class BrowserManager:
             ),
             locale="en-US",
             timezone_id="America/Los_Angeles",
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=IsolateOrigins,site-per-process",
-                "--disable-site-isolation-trials",
-            ],
-            ignore_default_args=["--enable-automation"],
             viewport={"width": 1280, "height": 800},
         )
 
@@ -137,5 +138,7 @@ class BrowserManager:
         """Closes the browser context and stops playwright."""
         if self.context:
             await self.context.close()
+        if hasattr(self, "_browser") and self._browser:
+            await self._browser.close()
         if self._playwright:
             await self._playwright.stop()
