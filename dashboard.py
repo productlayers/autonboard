@@ -461,7 +461,7 @@ def load_past_runs() -> list:
     return runs
 
 
-def render_insights(insights_data: dict):
+def render_insights(insights_data: dict, run_data: dict | None = None):
     """Renders the full narrative UX audit report."""
     
     # Detect old-schema files (they have completion_summary instead of tldr)
@@ -582,13 +582,35 @@ def render_insights(insights_data: dict):
                 for rec in recommendations:
                     priority = rec.get("priority", "P2")
                     priority_class = {"P0": "rec-p0", "P1": "rec-p1", "P2": "rec-p2"}.get(priority, "rec-p2")
+                    
                     st.markdown(f"""<div class="rec-card">
-                        <div class="rec-header">
-                            <span class="rec-priority {priority_class}">{priority}</span>
+                        <div class="rec-header" style="margin-bottom: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="rec-priority {priority_class}">{priority}</span>
+                                {f'<span class="rec-priority" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;">{rec.get("effort", "Medium")} Effort</span>' if "effort" in rec else ""}
+                            </div>
                             <span class="rec-area">{rec.get('area', '')}</span>
                         </div>
-                        <div class="rec-text">{rec.get('recommendation', '')}</div>
-                        <div class="rec-evidence">📎 {rec.get('evidence', '')}</div>
+                    """, unsafe_allow_html=True)
+                    
+                    if "recommendation" in rec and "proposed_state" not in rec:
+                        st.markdown(f'<div class="rec-text">{rec.get("recommendation", "")}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="rec-text" style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; color: #111827;">{rec.get("title", "Recommendation")}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rec-text" style="margin-bottom: 0.25rem;"><span style="color: #ef4444; font-weight: 600;">Current:</span> {rec.get("current_state", "")}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rec-text" style="margin-bottom: 0.5rem;"><span style="color: #10b981; font-weight: 600;">Proposed:</span> {rec.get("proposed_state", "")}</div>', unsafe_allow_html=True)
+
+                    screenshot_html = ""
+                    step_ref = rec.get("step_reference")
+                    if step_ref is not None and run_data:
+                        for step_data in run_data.get("history", []):
+                            if step_data.get("step") == step_ref and step_data.get("screenshot_base64"):
+                                screenshot_html = f'<div style="margin-top: 0.75rem;"><img src="data:image/jpeg;base64,{step_data["screenshot_base64"]}" style="width: 100%; border-radius: 6px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"></div>'
+                                break
+
+                    st.markdown(f"""
+                        <div class="rec-evidence" style="margin-top: 0.5rem; border-top: 1px dashed #e5e7eb; padding-top: 0.5rem;">📎 {rec.get('evidence', '')}</div>
+                        {screenshot_html}
                     </div>""", unsafe_allow_html=True)
         
         with col_next:
@@ -851,7 +873,7 @@ with tab_new:
                         st.warning(f"Run completed but logging failed: {log_err}")
 
                 # Phase 3.5: Reflection — extract L1 atoms + insights. Best effort.
-                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0 and getattr(target_persona, "archetype_id", None):
+                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0:
                     with st.status("🪞 Reflecting on the audit...", expanded=False) as reflect_status:
                         try:
                             async def do_reflect():
@@ -907,7 +929,7 @@ with tab_new:
                     insight_status.update(label=f"❌ Insight extraction failed: {e}", state="error")
             
             if findings:
-                render_insights(findings.model_dump())
+                render_insights(findings.model_dump(), run_results)
 
             is_success = run_results.get("run_success", False)
             status_class = "status-success" if is_success else "status-failed"
@@ -1000,7 +1022,7 @@ with tab_past:
                 is_old_schema = insights_data and "completion_summary" in insights_data and "tldr" not in insights_data
                 
                 if insights_data and not is_old_schema:
-                    render_insights(insights_data)
+                    render_insights(insights_data, run)
                 
                 # Show generate/regenerate button
                 btn_label = "🔄 Regenerate with New Format" if is_old_schema else "🧠 Generate UX Audit Report"

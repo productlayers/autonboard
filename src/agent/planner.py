@@ -59,20 +59,10 @@ class ActionPlanner:
 
     def _build_memory_block(self, persona: Persona) -> str:
         """
-        Retrieve L1 atoms for this archetype and render them as a 'PRIOR
-        OBSERVATIONS' section. Returns empty string if persona has no archetype_id
-        or no atoms exist yet.
-
-        Atoms are not instructions — they are deep characterization of how this
-        persona TYPE has behaved before. The framing tells the model to embody
-        them, not follow them.
-
-        Note: re-reads atoms.jsonl every plan call. At hackathon scale this is
-        cheap; cache per-run when atom counts grow.
+        Retrieve global tactical atoms (functional memory).
+        Atoms represent durable lessons the agent has learned about navigating UI.
         """
-        if not persona.archetype_id:
-            return ""
-        atoms = find_atoms(archetype_id=persona.archetype_id, limit=12)
+        atoms = find_atoms(limit=12)
         if not atoms:
             return ""
 
@@ -93,13 +83,12 @@ class ActionPlanner:
 
         body = "\n".join(lines)
         return (
-            f"\nPRIOR OBSERVATIONS — how a {persona.name} has actually behaved "
-            f"in past audits ({len(atoms)} observations across {len(by_stage)} stages):\n"
+            f"\nGLOBAL TACTICAL MEMORY — lessons learned from past audits "
+            f"({len(atoms)} observations across {len(by_stage)} stages):\n"
             f"{body}\n\n"
-            "These are NOT instructions. They are HOW YOU BEHAVE — deep "
-            "characterization of yourself. Express the same hesitations, voice "
-            "patterns, and emotional reactions as they naturally arise. Build on "
-            "them; don't contradict them.\n"
+            "These are your autonomous agent core directives. They represent UI patterns, traps, "
+            "and solutions you have encountered before. Follow them strictly to avoid getting stuck "
+            "or looping, but still express yourself in character when explaining why you are taking the action.\n"
         )
 
     async def plan_next_action(

@@ -14,3 +14,4 @@ To build a production-grade autonomous browser agent that adopts dynamic user pe
 * **No "Magic" Wrappers:** We do not use black-box browser agent frameworks. We build our own state-machine loop orchestrating raw Playwright to retain full control over reasoning and evaluation.
 * **No-Credential-Inputs:** Test account credentials must not be hardcoded or managed in `.env`. We use persistent browser profiles (e.g., Google SSO) to handle authentication natively.
 * **Human-in-the-Loop:** If the agent encounters CAPTCHAs or non-deterministic security blockers, it must pause, alert the human to solve it, log a friction event, and resume.
+* **Proactive Git Commits:** Automatically commit logical groupings of changes (features or fixes) at meaningful stages using `git commit` without waiting for the user to ask. Do not wait until the end of a session to dump massive changes; maintain clean traceability as you work.
