@@ -20,9 +20,10 @@ class Recommendation(BaseModel):
     effort: str = Field(description="'Low', 'Medium', or 'High' Engineering/Design effort to implement.")
     title: str = Field(description="A concise, punchy 4-8 word title for a Jira/Linear ticket (e.g., 'Make personality quiz skippable').")
     area: str = Field(description="Which part of the product this applies to, e.g. 'Onboarding Quiz', 'Signup Flow', 'Navigation'")
-    current_state: str = Field(description="What the product currently does wrong (e.g., 'Users are forced to answer 12 questions with no skip option.').")
-    proposed_state: str = Field(description="Exactly how the interaction or UI should change (e.g., 'Add a secondary 'Skip' button to the top right of the quiz header.').")
+    current_state: str = Field(description="What the product currently does wrong. DO NOT output code snippets or HTML.")
+    proposed_state: str = Field(description="Exactly how the interaction or UI should change. DO NOT output code snippets or HTML.")
     evidence: str = Field(description="Reference the specific steps or observations that support this recommendation.")
+    step_reference: int | None = Field(description="The exact step number (integer) where this issue is most visible, so we can display a screenshot. E.g., 4.", default=None)
 
 class UXFindings(BaseModel):
     """The complete narrative UX audit report."""
