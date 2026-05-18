@@ -24,7 +24,7 @@ load_dotenv()
 
 # ── Page Config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Auto Onboard — AI UX Auditor",
+    page_title="Best Foot Forward — AI UX Auditor",
     page_icon="✨",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -604,7 +604,7 @@ def render_insights(insights_data: dict):
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.markdown("## ✨ Auto Onboard")
+    st.markdown("## ✨ Best Foot Forward")
     st.caption("AI-Powered UX Auditor")
     st.divider()
 
@@ -655,7 +655,7 @@ tab_new, tab_past = st.tabs(["🚀 Run New Audit", "📊 Audit History"])
 # TAB 1: New Audit
 # ═══════════════════════════════════════════════════════════════════════════════
 with tab_new:
-    st.markdown('<div class="hero-title">Auto Onboard</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-title">Best Foot Forward</div>', unsafe_allow_html=True)
     st.markdown('<div class="hero-subtitle">Paste any product URL. Our AI adopts a real user persona, navigates your onboarding, and delivers a full UX audit — in minutes, not weeks.</div>', unsafe_allow_html=True)
 
     # Input form
@@ -760,7 +760,8 @@ with tab_new:
         def on_step(step_dict):
             counters["step"] = step_dict.get("step", counters["step"] + 1)
             if step_dict.get("action_type") == "pause_for_human":
-                counters["friction"] += 1
+                if step_dict.get("funnel_stage") not in ["signup_wall", "authentication"]:
+                    counters["friction"] += 1
             
             # Render chat bubble
             with steps_container:
@@ -850,7 +851,7 @@ with tab_new:
                         st.warning(f"Run completed but logging failed: {log_err}")
 
                 # Phase 3.5: Reflection — extract L1 atoms + insights. Best effort.
-                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0 and target_persona.archetype_id:
+                if 'logged_run_id' in locals() and run_results and run_results.get("steps", 0) > 0 and getattr(target_persona, "archetype_id", None):
                     with st.status("🪞 Reflecting on the audit...", expanded=False) as reflect_status:
                         try:
                             async def do_reflect():

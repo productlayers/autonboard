@@ -108,7 +108,10 @@ class AgentOrchestrator:
                 if prev_error:
                     environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action failed with browser error: '{prev_error}'. The element might be hidden, blocked by a popup, or unclickable. You must try a different approach.\n"
                 elif step > 1 and dom_state == prev_dom_state:
-                    environmental_feedback += "ENVIRONMENTAL FEEDBACK: Your last action had no visible effect on the page. The screen is exactly the same. You may have missed a required input, clicked a disabled button, or triggered an invisible error."
+                    if history and history[-1].action_type == "scroll":
+                        environmental_feedback += "ENVIRONMENTAL FEEDBACK: You tried to scroll, but the viewport did not change. You may have reached the top/bottom of the page, or this page does not scroll. Do NOT try scrolling again."
+                    else:
+                        environmental_feedback += "ENVIRONMENTAL FEEDBACK: Your last action had no visible effect on the page. The screen is exactly the same. You may have missed a required input, clicked a disabled button, or triggered an invisible error."
                 elif step > 1 and len(raw_elements) >= prev_element_count + 3:
                     # Element count grew significantly — something was added to the page (e.g. a new form field in a builder)
                     environmental_feedback += f'ENVIRONMENTAL FEEDBACK: Your last action ADDED content to the page — {len(raw_elements) - prev_element_count} new elements appeared. Something was successfully created or added. Check the canvas or left panel to see what changed before clicking anything else. If your target content is now visible, output "done".'
@@ -145,6 +148,11 @@ class AgentOrchestrator:
                     if len(recent_click_ids_raw) >= 4 and len(set(recent_click_ids_raw)) == 2:
                         a, b = list(set(recent_click_ids_raw))
                         environmental_feedback += f"\n\nCRITICAL PING-PONG LOOP: You have been alternating between exactly 2 elements [{a}] and [{b}] with no progress. This back-and-forth is achieving nothing. Both elements are NOT behaving as expected. You MUST break the pattern entirely — try a completely different element, scroll to find another path, or use 'pause_for_human'."
+
+                    # 5. Scroll Loop detection
+                    recent_scrolls = [h for h in history[-3:] if h.action_type == "scroll"]
+                    if len(recent_scrolls) == 3:
+                        environmental_feedback += "\n\nCRITICAL SCROLL LOOP: You have scrolled 3 times in a row without interacting with anything. You MUST interact with a visible element or use 'pause_for_human' on the next turn."
                     elif len(recent_reasonings) >= 2 and recent_reasonings[-1] == recent_reasonings[-2]:
                         environmental_feedback += "\n\nWARNING: You are repeating your reasoning from the previous step. If this action doesn't work this time, you MUST change your strategy in the next step."
 
@@ -233,7 +241,9 @@ class AgentOrchestrator:
                     break
 
                 if action.action_type == "pause_for_human":
-                    friction_events += 1
+                    # Do not penalize the product for our hardcoded auth rule
+                    if action.funnel_stage not in ["signup_wall", "authentication"]:
+                        friction_events += 1
                     await self.browser.pause_for_human(action.reasoning)
                     # Give SPAs a chance to render after the human closes the popup
                     await asyncio.sleep(3)

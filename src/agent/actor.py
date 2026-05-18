@@ -30,6 +30,18 @@ class PlaywrightActor:
                 await page.wait_for_timeout(3000)
                 return True, ""
 
+            elif action.action_type == "scroll":
+                viewport_size = page.viewport_size
+                height = viewport_size["height"] if viewport_size else 800
+                delta_y = int(height * 0.6)
+                if getattr(action, "scroll_direction", "down") == "up":
+                    delta_y = -delta_y
+
+                # Scroll the page viewport
+                await page.mouse.wheel(0, delta_y)
+                await page.wait_for_timeout(1000)
+                return True, ""
+
             elif action.action_type in ["click", "type"] and action.element_id:
                 # Select the element by the custom bff-id attribute we injected
                 locator = page.locator(f'[bff-id="{action.element_id}"]')
