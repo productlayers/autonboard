@@ -582,13 +582,26 @@ def render_insights(insights_data: dict):
                 for rec in recommendations:
                     priority = rec.get("priority", "P2")
                     priority_class = {"P0": "rec-p0", "P1": "rec-p1", "P2": "rec-p2"}.get(priority, "rec-p2")
+                    
                     st.markdown(f"""<div class="rec-card">
-                        <div class="rec-header">
-                            <span class="rec-priority {priority_class}">{priority}</span>
+                        <div class="rec-header" style="margin-bottom: 0.5rem;">
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="rec-priority {priority_class}">{priority}</span>
+                                {f'<span class="rec-priority" style="background:#f3f4f6;color:#374151;border:1px solid #d1d5db;">{rec.get("effort", "Medium")} Effort</span>' if "effort" in rec else ""}
+                            </div>
                             <span class="rec-area">{rec.get('area', '')}</span>
                         </div>
-                        <div class="rec-text">{rec.get('recommendation', '')}</div>
-                        <div class="rec-evidence">📎 {rec.get('evidence', '')}</div>
+                    """, unsafe_allow_html=True)
+                    
+                    if "recommendation" in rec and "proposed_state" not in rec:
+                        st.markdown(f'<div class="rec-text">{rec.get("recommendation", "")}</div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div class="rec-text" style="font-weight: 600; font-size: 1.05rem; margin-bottom: 0.5rem; color: #111827;">{rec.get("title", "Recommendation")}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rec-text" style="margin-bottom: 0.25rem;"><span style="color: #ef4444; font-weight: 600;">Current:</span> {rec.get("current_state", "")}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="rec-text" style="margin-bottom: 0.5rem;"><span style="color: #10b981; font-weight: 600;">Proposed:</span> {rec.get("proposed_state", "")}</div>', unsafe_allow_html=True)
+
+                    st.markdown(f"""
+                        <div class="rec-evidence" style="margin-top: 0.5rem; border-top: 1px dashed #e5e7eb; padding-top: 0.5rem;">📎 {rec.get('evidence', '')}</div>
                     </div>""", unsafe_allow_html=True)
         
         with col_next:

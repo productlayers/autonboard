@@ -17,8 +17,11 @@ class Observation(BaseModel):
 class Recommendation(BaseModel):
     """A specific, actionable recommendation for the product team."""
     priority: str = Field(description="'P0' (ship-blocking), 'P1' (high impact), or 'P2' (nice to have)")
+    effort: str = Field(description="'Low', 'Medium', or 'High' Engineering/Design effort to implement.")
+    title: str = Field(description="A concise, punchy 4-8 word title for a Jira/Linear ticket (e.g., 'Make personality quiz skippable').")
     area: str = Field(description="Which part of the product this applies to, e.g. 'Onboarding Quiz', 'Signup Flow', 'Navigation'")
-    recommendation: str = Field(description="A concrete, actionable recommendation. Not vague advice — tell the team exactly what to change. e.g., 'Remove the personality preference question or make it skippable — it blocks 100% of users who don't understand the forced-choice interaction.'")
+    current_state: str = Field(description="What the product currently does wrong (e.g., 'Users are forced to answer 12 questions with no skip option.').")
+    proposed_state: str = Field(description="Exactly how the interaction or UI should change (e.g., 'Add a secondary 'Skip' button to the top right of the quiz header.').")
     evidence: str = Field(description="Reference the specific steps or observations that support this recommendation.")
 
 class UXFindings(BaseModel):
