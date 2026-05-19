@@ -36,7 +36,15 @@ class AgentAction(BaseModel):
         "product_tour",
         "first_action",
         "hva_achieved",
-    ] = Field(description="Classify which stage of the onboarding funnel you are currently in.", default="landing_page")
+    ] = Field(
+        description=(
+            "Classify the current stage of the onboarding funnel. "
+            "Use 'authentication' ONLY when active credential/MFA input fields (e.g., email, password, username, SSO login fields, verification codes) are visible on the screen. "
+            "Use 'onboarding_questionnaire' for any post-login setup steps, profile details, nickname/name choices, age or birthday forms, role/team invitations, preference checklist pages, or onboarding surveys. "
+            "This distinction is critical: 'authentication' triggers a complete human-in-the-loop pause hold, whereas 'onboarding_questionnaire' allows you to fill out forms autonomously based on your persona."
+        ),
+        default="landing_page",
+    )
 
 
 _FUNNEL_STAGE_ORDER = [

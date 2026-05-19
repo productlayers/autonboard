@@ -12,7 +12,7 @@ class DOMObserver:
     () => {
         let counter = 1;
         const elements = [];
-        const interactiveSelectors = 'a, button, input, select, textarea, label, [role="button"], [role="radio"], [role="checkbox"], [role="menuitem"], [tabindex="0"]';
+        const interactiveSelectors = 'a, button, input, select, textarea, label, [contenteditable="true"], [role="button"], [role="radio"], [role="checkbox"], [role="menuitem"], [tabindex="0"]';
         
         const candidateElements = [];
         document.querySelectorAll(interactiveSelectors).forEach(el => candidateElements.push(el));
