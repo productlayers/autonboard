@@ -35,6 +35,18 @@ class DOMObserver:
                 return;
             }
             
+            // Filter out generic containers if they contain formally interactive descendant elements
+            // to ensure the agent only interacts with specific leaf-level target options.
+            const genericContainers = ['DIV', 'SPAN', 'LI', 'UL', 'OL', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER'];
+            if (genericContainers.includes(el.tagName)) {
+                const hasFormalInteractiveDescendant = Array.from(el.querySelectorAll('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')).some(child => {
+                    return candidateElements.includes(child);
+                });
+                if (hasFormalInteractiveDescendant) {
+                    return;
+                }
+            }
+            
             // Skip visually obscured elements (e.g. background elements covered by active modals/dialogs)
             try {
                 const centerX = rect.left + rect.width / 2;
