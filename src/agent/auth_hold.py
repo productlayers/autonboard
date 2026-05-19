@@ -136,6 +136,30 @@ async def wait_for_auth_completion(
         try:
             await _wait_for_resume_on_page(page, safe_reason)
             console.print("[bold green]▶ Resuming agent execution...[/bold green]\n")
+            
+            # Post-login settle: wait until page transitions away from auth/SSO/login URLs
+            console.print("[yellow]Waiting for auth redirect to complete and page to settle...[/yellow]")
+            start_settle = time.monotonic()
+            while time.monotonic() - start_settle < 15:
+                current_pages = [p for p in context.pages if not p.is_closed()] if context else []
+                if not current_pages:
+                    break
+                active_p = current_pages[-1]
+                url = active_p.url.lower()
+                
+                auth_indicators = ["accounts.spotify.com", "accounts.google.com", "appleid.apple.com", "login", "signup", "signin", "authorize", "oauth", "auth/"]
+                is_auth_url = any(ind in url for ind in auth_indicators)
+                if is_auth_url:
+                    await asyncio.sleep(1.0)
+                    continue
+                
+                try:
+                    await active_p.wait_for_load_state("domcontentloaded", timeout=3000)
+                    await active_p.wait_for_load_state("networkidle", timeout=3000)
+                except Exception:
+                    pass
+                break
+            
             return "manual"
         except Exception:
             # Page navigated (e.g. SSO redirect) — re-inject on next loop iteration

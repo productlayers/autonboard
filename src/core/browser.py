@@ -139,6 +139,29 @@ class BrowserManager:
                 # Page navigated (e.g., SSO redirect), destroying the banner.
                 # Wait for the new page to settle, then re-inject.
                 await asyncio.sleep(3)
+        
+        # Post-login settle: wait until page transitions away from auth/SSO/login URLs
+        console.print("[yellow]Waiting for auth redirect to complete and page to settle...[/yellow]")
+        import time
+        start_settle = time.monotonic()
+        while time.monotonic() - start_settle < 15:
+            if self.page is None or self.page.is_closed():
+                break
+            url = self.page.url.lower()
+            
+            auth_indicators = ["accounts.spotify.com", "accounts.google.com", "appleid.apple.com", "login", "signup", "signin", "authorize", "oauth", "auth/"]
+            is_auth_url = any(ind in url for ind in auth_indicators)
+            if is_auth_url:
+                await asyncio.sleep(1.0)
+                continue
+            
+            try:
+                await self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+                await self.page.wait_for_load_state("networkidle", timeout=3000)
+            except Exception:
+                pass
+            break
+
         console.print("[bold green]▶ Resuming agent execution...[/bold green]\n")
 
     async def stop(self) -> None:
