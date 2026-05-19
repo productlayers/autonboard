@@ -1,8 +1,23 @@
 import json
 import os
+import re
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
+
+_AUTH_FUNNEL_STAGES = frozenset({"signup_wall", "authentication"})
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_AUTH_FRICTION_PHRASES = (
+    "signup wall",
+    "sign-up wall",
+    "authentication",
+    "pause for human",
+    "human intervention",
+    "human assistance",
+    "enter credentials",
+    "login wall",
+    "sign in wall",
+)
 
 # ── Schema: Narrative UX Report ──────────────────────────────────────────────
 
@@ -51,6 +66,13 @@ class UXFindings(BaseModel):
     persona_impact: str = Field(description="How did this specific persona's traits (technical literacy, goals, behavioral patterns) shape their experience? Would a different persona have had a better or worse time? Be specific.")
 
 
+def _strip_html(text: str) -> str:
+    if not text:
+        return text
+    cleaned = _HTML_TAG_RE.sub("", text)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 class UXAnalyzer:
     """Uses LLM to post-process a completed run and generate a narrative UX audit report."""
 
@@ -62,6 +84,65 @@ class UXAnalyzer:
         self.model = os.getenv("OPENAI_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
         self.insights_dir = "data/insights"
         os.makedirs(self.insights_dir, exist_ok=True)
+
+    def _postprocess_findings(self, findings: UXFindings, history: list[dict]) -> UXFindings:
+        """Remove auth-policy noise and HTML artifacts the model sometimes emits."""
+        findings.tldr = _strip_html(findings.tldr)
+        findings.narrative = _strip_html(findings.narrative)
+        findings.persona_impact = _strip_html(findings.persona_impact)
+        findings.bright_spots = [_strip_html(s) for s in findings.bright_spots]
+        findings.next_steps = [_strip_html(s) for s in findings.next_steps]
+
+        findings.observations = [
+            o
+            for o in findings.observations
+            if not self._is_auth_policy_friction_observation(o)
+        ]
+        for obs in findings.observations:
+            obs.observation = _strip_html(obs.observation)
+
+        findings.recommendations = [
+            r
+            for r in findings.recommendations
+            if not self._is_auth_policy_friction_recommendation(r)
+        ]
+        for rec in findings.recommendations:
+            rec.title = _strip_html(rec.title)
+            rec.current_state = _strip_html(rec.current_state)
+            rec.proposed_state = _strip_html(rec.proposed_state)
+            rec.evidence = _strip_html(rec.evidence)
+            if rec.step_reference is None:
+                rec.step_reference = self._infer_step_reference(rec.evidence, history)
+
+        return findings
+
+    @staticmethod
+    def _is_auth_policy_friction_observation(obs: Observation) -> bool:
+        if obs.funnel_stage not in _AUTH_FUNNEL_STAGES:
+            return False
+        if obs.ux_category == "Good Experience":
+            return False
+        text = f"{obs.observation} {obs.ux_category}".lower()
+        return obs.ux_category == "Auth Wall" or any(p in text for p in _AUTH_FRICTION_PHRASES)
+
+    @staticmethod
+    def _is_auth_policy_friction_recommendation(rec: Recommendation) -> bool:
+        blob = f"{rec.area} {rec.title} {rec.current_state} {rec.proposed_state} {rec.evidence}".lower()
+        if not any(k in blob for k in ("signup", "sign-up", "authentication", "login", "sign in")):
+            return False
+        return any(p in blob for p in _AUTH_FRICTION_PHRASES) or (
+            "require" in blob and "sign up" in blob
+        )
+
+    @staticmethod
+    def _infer_step_reference(evidence: str, history: list[dict]) -> int | None:
+        match = re.search(r"\bstep\s*(\d+)\b", evidence, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        range_match = re.search(r"\bsteps?\s*(\d+)\s*[-–]\s*(\d+)\b", evidence, re.IGNORECASE)
+        if range_match:
+            return int(range_match.group(1))
+        return history[0].get("step") if history else None
 
     async def analyze_run(self, run_data: dict) -> UXFindings:
         """Analyzes a run and returns a narrative UX report."""
@@ -88,9 +169,22 @@ class UXAnalyzer:
             if step.get("text_to_type"):
                 part += f" (typed: '{step['text_to_type']}')"
             part += f"\n  Persona's reasoning: \"{reasoning}\""
+            if action == "pause_for_human" and stage in _AUTH_FUNNEL_STAGES:
+                part += (
+                    "\n  NOTE: AGENT_POLICY_PAUSE — The audit agent cannot type credentials. "
+                    "A human operator completed signup/login in the browser. "
+                    "This is standard for B2B products and is NOT product UX friction."
+                )
             if not success:
                 part += f"\n  ⚠ ACTION FAILED: {error}"
             history_str_parts.append(part)
+
+        auth_policy_pauses = sum(
+            1
+            for step in history
+            if step.get("action_type") == "pause_for_human"
+            and step.get("funnel_stage") in _AUTH_FUNNEL_STAGES
+        )
 
         history_text = "\n\n".join(history_str_parts)
 
@@ -121,7 +215,8 @@ Your report will be read by the VP of Product, the Head of Design, and the growt
 4. EVIDENCE-BASED — Reference specific steps, element labels, and user reasoning to support every claim.
 5. ALWAYS RECOMMEND — Even if the onboarding was flawless, you MUST provide at least 2 recommendations and 3 next steps. For strong flows, suggest optimizations (reduce steps, improve copy, A/B tests), cross-persona risks ("this worked for a tech-savvy user, but would a non-technical user survive step 4?"), or retention improvements ("add a progress indicator to the quiz to reduce perceived effort").
 6. NEXT STEPS — End with concrete next steps the product team should take. These are tasks they can assign in their project tracker — specific, scoped, and actionable.
-7. AUTHENTICATION IS NOT A FLAW — Requiring a user to sign up or log in is standard business practice. Do NOT treat the mere existence of a signup wall or authentication step as a negative observation or "UX Friction" unless the flow itself is broken or unusually difficult.
+7. AUTHENTICATION IS NOT A FLAW — Requiring sign up or log in is standard. Never flag signup_wall or authentication as friction, Auth Wall severity, or P0 signup recommendations unless the flow is genuinely broken (e.g., CAPTCHA loop, SSO error, form validation bug). Steps marked AGENT_POLICY_PAUSE are harness limitations, not product failures.
+8. NO CODE OR HTML — Write in plain product language only. Never output HTML tags, DOM snippets, or CSS in any field. For recommendations, set step_reference to the step number where the issue is visible.
 
 Write as if you are presenting findings to the product team in a design review."""
 
@@ -131,7 +226,8 @@ TARGET HVA: {run_data.get('target_action', 'Unknown')}
 RUN OUTCOME: {run_data.get('status', 'Unknown')}
 FAILURE REASON: {run_data.get('failure_reason', 'N/A')}
 TOTAL STEPS: {len(history)}
-FRICTION EVENTS: {run_data.get('friction_events', 0)}
+PRODUCT FRICTION EVENTS (excludes auth-policy pauses): {run_data.get('friction_events', 0)}
+AUTH-POLICY PAUSES (operator sign-in, not product friction): {auth_policy_pauses}
 
 --- PERSONA PROFILE ---
 {persona_details if persona_details else f"Persona: {persona_name}"}
@@ -153,7 +249,9 @@ FRICTION EVENTS: {run_data.get('friction_events', 0)}
         )
 
         findings = response.choices[0].message.parsed
-        return findings
+        if findings is None:
+            raise RuntimeError("LLM returned no parsed UXFindings")
+        return self._postprocess_findings(findings, history)
 
     def save_insights(self, run_id: str, findings: UXFindings):
         """Saves the Pydantic findings model to a JSON file."""

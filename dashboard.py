@@ -461,6 +461,33 @@ def load_past_runs() -> list:
     return runs
 
 
+def _get_step_screenshot_bytes(step_data: dict) -> bytes | None:
+    """Load step screenshot from inline base64 or disk path (logged runs strip base64)."""
+    screenshot_b64 = step_data.get("screenshot_base64")
+    if screenshot_b64:
+        try:
+            return base64.b64decode(screenshot_b64)
+        except Exception:
+            pass
+    screenshot_path = step_data.get("screenshot_path")
+    if screenshot_path and os.path.exists(screenshot_path):
+        try:
+            with open(screenshot_path, "rb") as f:
+                return f.read()
+        except Exception:
+            pass
+    return None
+
+
+def _find_step_in_history(history: list[dict], step_ref: int) -> dict | None:
+    for step_data in history:
+        if step_data.get("step") == step_ref:
+            return step_data
+    if 1 <= step_ref <= len(history):
+        return history[step_ref - 1]
+    return None
+
+
 def render_insights(insights_data: dict, run_data: dict | None = None):
     """Renders the full narrative UX audit report."""
     
@@ -600,18 +627,25 @@ def render_insights(insights_data: dict, run_data: dict | None = None):
                         st.markdown(f'<div class="rec-text" style="margin-bottom: 0.25rem;"><span style="color: #ef4444; font-weight: 600;">Current:</span> {rec.get("current_state", "")}</div>', unsafe_allow_html=True)
                         st.markdown(f'<div class="rec-text" style="margin-bottom: 0.5rem;"><span style="color: #10b981; font-weight: 600;">Proposed:</span> {rec.get("proposed_state", "")}</div>', unsafe_allow_html=True)
 
-                    screenshot_html = ""
                     step_ref = rec.get("step_reference")
+                    rec_screenshot: bytes | None = None
                     if step_ref is not None and run_data:
-                        for step_data in run_data.get("history", []):
-                            if step_data.get("step") == step_ref and step_data.get("screenshot_base64"):
-                                screenshot_html = f'<div style="margin-top: 0.75rem;"><img src="data:image/jpeg;base64,{step_data["screenshot_base64"]}" style="width: 100%; border-radius: 6px; border: 1px solid #e5e7eb; box-shadow: 0 1px 3px rgba(0,0,0,0.1);"></div>'
-                                break
+                        step_data = _find_step_in_history(run_data.get("history", []), int(step_ref))
+                        if step_data:
+                            rec_screenshot = _get_step_screenshot_bytes(step_data)
 
-                    st.markdown(f"""
-                        <div class="rec-evidence" style="margin-top: 0.5rem; border-top: 1px dashed #e5e7eb; padding-top: 0.5rem;">📎 {rec.get('evidence', '')}</div>
-                        {screenshot_html}
-                    </div>""", unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div class="rec-evidence" style="margin-top: 0.5rem; border-top: 1px dashed #e5e7eb; padding-top: 0.5rem;">📎 {rec.get("evidence", "")}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if rec_screenshot:
+                        st.image(
+                            rec_screenshot,
+                            caption=f"Step {step_ref} — where this issue appears",
+                            use_container_width=True,
+                        )
+
+                    st.markdown("</div>", unsafe_allow_html=True)
         
         with col_next:
             if next_steps:
