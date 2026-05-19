@@ -296,7 +296,12 @@ class AgentOrchestrator:
                         await self.browser.pause_for_human(action.reasoning)
 
                     # Give SPAs a chance to render after the human closes the popup
-                    await asyncio.sleep(3)
+                    try:
+                        await page.wait_for_load_state("domcontentloaded", timeout=3000)
+                        await page.wait_for_load_state("networkidle", timeout=3000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(5)
                     # Clear prev state so we don't trigger the "no visible effect" warning incorrectly
                     prev_dom_state = ""
                     step_dict["success"] = True

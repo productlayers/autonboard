@@ -53,26 +53,35 @@ async def _wait_for_resume_on_page(page: Page, safe_reason: str) -> None:
     await page.evaluate(
         f"""
         () => new Promise((resolve) => {{
-            const existing = document.getElementById('bff-pause-overlay');
-            if (existing) existing.remove();
-            const banner = document.createElement('div');
-            banner.id = 'bff-pause-overlay';
-            banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;'
-                + 'background:linear-gradient(135deg,#4338CA,#6366F1);z-index:2147483647;'
-                + 'display:flex;align-items:center;justify-content:space-between;'
-                + 'padding:0.6rem 1.2rem;font-family:system-ui,sans-serif;gap:1rem;';
-            banner.innerHTML = `
-                <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">
-                    <span style="font-size:1.2rem;">⚠️</span>
-                    <span style="color:white;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_reason}</span>
-                </div>
-                <button id="bff-resume-btn" style="padding:0.45rem 1.2rem;background:white;color:#4338CA;border:none;border-radius:6px;font-weight:700;cursor:pointer;">✅ Resume Agent</button>
-            `;
-            document.body.appendChild(banner);
-            document.getElementById('bff-resume-btn').addEventListener('click', () => {{
-                banner.remove();
+            let banner = document.getElementById('bff-pause-overlay');
+            if (!banner) {{
+                banner = document.createElement('div');
+                banner.id = 'bff-pause-overlay';
+                banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;'
+                    + 'background:linear-gradient(135deg,#4338CA,#6366F1);z-index:2147483647;'
+                    + 'display:flex;align-items:center;justify-content:space-between;'
+                    + 'padding:0.6rem 1.2rem;font-family:system-ui,sans-serif;gap:1rem;';
+                banner.innerHTML = `
+                    <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;flex:1;">
+                        <span style="font-size:1.2rem;">⚠️</span>
+                        <span style="color:white;font-size:0.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_reason}</span>
+                    </div>
+                    <button id="bff-resume-btn" style="padding:0.45rem 1.2rem;background:white;color:#4338CA;border:none;border-radius:6px;font-weight:700;cursor:pointer;">✅ Resume Agent</button>
+                `;
+                document.body.appendChild(banner);
+            }}
+            const btn = document.getElementById('bff-resume-btn');
+            if (btn) {{
+                const newBtn = btn.cloneNode(true);
+                btn.parentNode.replaceChild(newBtn, btn);
+                newBtn.addEventListener('click', () => {{
+                    const el = document.getElementById('bff-pause-overlay');
+                    if (el) el.remove();
+                    resolve();
+                }});
+            }} else {{
                 resolve();
-            }});
+            }}
         }})
         """
     )
