@@ -169,12 +169,20 @@ class UXAnalyzer:
             if step.get("text_to_type"):
                 part += f" (typed: '{step['text_to_type']}')"
             part += f"\n  Persona's reasoning: \"{reasoning}\""
-            if action == "pause_for_human" and stage in _AUTH_FUNNEL_STAGES:
-                part += (
-                    "\n  NOTE: AGENT_POLICY_PAUSE — The audit agent cannot type credentials. "
-                    "A human operator completed signup/login in the browser. "
-                    "This is standard for B2B products and is NOT product UX friction."
-                )
+            if action == "pause_for_human":
+                if stage in _AUTH_FUNNEL_STAGES:
+                    part += (
+                        "\n  NOTE: AGENT_POLICY_PAUSE — The audit agent cannot type credentials. "
+                        "A human operator completed signup/login in the browser. "
+                        "This is standard for B2B products and is NOT product UX friction."
+                    )
+                else:
+                    part += (
+                        "\n  NOTE: AGENT_TECHNICAL_PAUSE — The browser automation harness paused "
+                        "for technical intervention (e.g., interactive card limitations, captchas, or loop avoidance). "
+                        "A human operator assisted the script. This is a harness/automation artifact, "
+                        "NOT a product design failure or user friction event."
+                    )
             if not success:
                 part += f"\n  ⚠ ACTION FAILED: {error}"
             history_str_parts.append(part)
