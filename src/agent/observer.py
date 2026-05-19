@@ -27,19 +27,34 @@ class DOMObserver:
         });
         
         candidateElements.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            
             // Skip hidden elements
             const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || el.offsetWidth === 0 || el.offsetHeight === 0) {
+            if (style.display === 'none' || style.visibility === 'hidden' || rect.width === 0 || rect.height === 0) {
                 return;
+            }
+            
+            // Skip visually obscured elements (e.g. background elements covered by active modals/dialogs)
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            const isWithinViewport = (
+                centerX >= 0 &&
+                centerY >= 0 &&
+                centerX <= window.innerWidth &&
+                centerY <= window.innerHeight
+            );
+            if (isWithinViewport) {
+                const topEl = document.elementFromPoint(centerX, centerY);
+                if (topEl && !el.contains(topEl) && !topEl.contains(el)) {
+                    return;
+                }
             }
             
             // Assign our custom attribute
             const bffId = counter.toString();
             el.setAttribute('bff-id', bffId);
             counter++;
-            
-            // Draw Bounding Box for Vision Model
-            const rect = el.getBoundingClientRect();
             const box = document.createElement('div');
             box.className = 'bff-som-box';
             box.style.position = 'absolute';
