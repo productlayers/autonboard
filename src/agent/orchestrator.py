@@ -125,12 +125,28 @@ class AgentOrchestrator:
                     # 1. ID-based loops (Standard)
                     recent_ids = [h.element_id for h in history[-3:] if h.element_id]
                     if len(recent_ids) >= 3 and len(set(recent_ids)) == 1:
-                        environmental_feedback += f"\n\nCRITICAL LOOP DETECTED: You have clicked element [{recent_ids[0]}] three times in a row with no progress. This element is NOT working. You MUST try a different approach."
-
+                        # Relax loop detection for progression elements or active page state updates
+                        is_progression = False
+                        PROGRESSION_KEYWORDS = {"continue", "next", "skip", "submit", "agree", "accept", "got it", "forward", "start", "dismiss", "proceed", "yes", "no"}
+                        
+                        last_text = ""
+                        if len(rich_history) >= 1:
+                            last_text = (rich_history[-1].get("element_text") or "").lower()
+                        
+                        # If the page changed, or the clicked element is a standard next/continue button,
+                        # do not treat it as a critical loop unless the page has completely stalled (no visual or structural update).
+                        if dom_state != prev_dom_state or any(kw in last_text for kw in PROGRESSION_KEYWORDS):
+                            is_progression = True
+                            
+                        if not is_progression:
+                            environmental_feedback += f"\n\nCRITICAL LOOP DETECTED: You have clicked element [{recent_ids[0]}] three times in a row with no progress. This element is NOT working. You MUST try a different approach."
+ 
                     # 2. Reasoning-based loops (SPA-aware: detects when IDs shift but logic is stuck)
                     recent_reasonings = [h.reasoning.strip() for h in history[-3:]]
                     if len(recent_reasonings) >= 3 and len(set(recent_reasonings)) == 1:
-                        environmental_feedback += f"\n\nCRITICAL SEMANTIC LOOP: You have used the EXACT same reasoning for 3 steps in a row: '{recent_reasonings[0]}'. This proves your current strategy is not working on this page. You are strictly FORBIDDEN from repeating this action. Look at the screen again and find a new way forward."
+                        # Only flag if the DOM has not updated (meaning we are actually stuck on the same screen)
+                        if dom_state == prev_dom_state:
+                            environmental_feedback += f"\n\nCRITICAL SEMANTIC LOOP: You have used the EXACT same reasoning for 3 steps in a row: '{recent_reasonings[0]}'. This proves your current strategy is not working on this page. You are strictly FORBIDDEN from repeating this action. Look at the screen again and find a new way forward."
 
                     # 3. Sibling cycling detection (catches Spotify-style hover-reveal loops)
                     # Triggers when the agent clicks 4 nearby element IDs with the same action type

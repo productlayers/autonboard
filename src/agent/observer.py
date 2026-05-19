@@ -14,7 +14,19 @@ class DOMObserver:
         const elements = [];
         const interactiveSelectors = 'a, button, input, select, textarea, label, [role="button"], [role="radio"], [role="checkbox"], [role="menuitem"], [tabindex="0"]';
         
-        document.querySelectorAll(interactiveSelectors).forEach(el => {
+        const candidateElements = [];
+        document.querySelectorAll(interactiveSelectors).forEach(el => candidateElements.push(el));
+        
+        // Find custom interactive divs, spans, lis, svgs, imgs using cursor: pointer
+        document.querySelectorAll('div, span, li, img, svg').forEach(el => {
+            if (candidateElements.includes(el)) return;
+            const style = window.getComputedStyle(el);
+            if (style.cursor === 'pointer' || style.cursor === 'hand') {
+                candidateElements.push(el);
+            }
+        });
+        
+        candidateElements.forEach(el => {
             // Skip hidden elements
             const style = window.getComputedStyle(el);
             if (style.display === 'none' || style.visibility === 'hidden' || el.offsetWidth === 0 || el.offsetHeight === 0) {
