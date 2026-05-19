@@ -36,19 +36,23 @@ class DOMObserver:
             }
             
             // Skip visually obscured elements (e.g. background elements covered by active modals/dialogs)
-            const centerX = rect.left + rect.width / 2;
-            const centerY = rect.top + rect.height / 2;
-            const isWithinViewport = (
-                centerX >= 0 &&
-                centerY >= 0 &&
-                centerX <= window.innerWidth &&
-                centerY <= window.innerHeight
-            );
-            if (isWithinViewport) {
-                const topEl = document.elementFromPoint(centerX, centerY);
-                if (topEl && !el.contains(topEl) && !topEl.contains(el)) {
-                    return;
+            try {
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const isWithinViewport = (
+                    centerX >= 0 &&
+                    centerY >= 0 &&
+                    centerX <= window.innerWidth &&
+                    centerY <= window.innerHeight
+                );
+                if (isWithinViewport) {
+                    const topEl = document.elementFromPoint(centerX, centerY);
+                    if (topEl && !el.contains(topEl) && !topEl.contains(el)) {
+                        return;
+                    }
                 }
+            } catch (e) {
+                // Safely ignore cross-origin or node exceptions and do not filter out the element
             }
             
             // Assign our custom attribute
