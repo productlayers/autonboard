@@ -1,10 +1,9 @@
-"""Auth hold: one pause session until signup/login is complete."""
+"""Auth hold: one pause session until the human clicks Resume after signup/login."""
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import re
 import time
 from collections.abc import Callable
 from typing import Literal
@@ -16,82 +15,9 @@ console = Console()
 
 AUTH_FUNNEL_STAGES = frozenset({"signup_wall", "authentication"})
 
-_AUTH_URL_RE = re.compile(
-    r"/(signup|sign-up|sign_in|sign-in|signin|login|log-in|register|registration|auth)(/|$|\?)"
-    r"|accounts\.google\.com"
-    r"|login\.microsoftonline\.com"
-    r"|appleid\.apple\.com"
-    r"|/oauth2?(/|$|\?)"
-    r"|/sso(/|$|\?)",
-    re.IGNORECASE,
-)
-
-_POST_AUTH_URL_RE = re.compile(
-    r"/(onboarding|welcome|setup|getting-started|get-started|home|dashboard|app)(/|$|\?)",
-    re.IGNORECASE,
-)
 
 def is_auth_funnel_stage(stage: str) -> bool:
     return stage in AUTH_FUNNEL_STAGES
-
-
-def url_looks_like_auth(url: str) -> bool:
-    return bool(_AUTH_URL_RE.search(url))
-
-
-def url_looks_post_auth(url: str) -> bool:
-    lower = url.lower()
-    if url_looks_like_auth(lower):
-        return False
-    return bool(_POST_AUTH_URL_RE.search(lower))
-
-
-async def page_has_visible_credential_form(page: Page) -> bool:
-    """True when email+password style fields are visible (signup/login still active)."""
-    try:
-        return bool(
-            await page.evaluate(
-                """() => {
-                    const pw = document.querySelector('input[type="password"]');
-                    if (!pw) return false;
-                    const pr = pw.getBoundingClientRect();
-                    if (pr.width < 2 || pr.height < 2) return false;
-                    const style = window.getComputedStyle(pw);
-                    if (style.visibility === 'hidden' || style.display === 'none') return false;
-                    const email = document.querySelector(
-                        'input[type="email"], input[autocomplete="username"], input[name*="email" i]'
-                    );
-                    if (!email) return pw.offsetParent !== null;
-                    const er = email.getBoundingClientRect();
-                    if (er.width < 2 || er.height < 2) return false;
-                    return email.offsetParent !== null && pw.offsetParent !== null;
-                }"""
-            )
-        )
-    except Exception:
-        return False
-
-
-async def page_appears_post_auth(page: Page) -> bool:
-    """Heuristic: left auth surfaces and likely inside product onboarding/app."""
-    try:
-        url = page.url
-    except Exception:
-        return False
-
-    if url_looks_post_auth(url):
-        return True
-
-    if url_looks_like_auth(url):
-        return False
-
-    if await page_has_visible_credential_form(page):
-        return False
-
-    lower = url.lower()
-    if not lower or lower == "about:blank" or lower.startswith("chrome://"):
-        return False
-    return not any(h in lower for h in ("accounts.google", "login.microsoft", "appleid.apple"))
 
 
 def _escape_js_string(value: str) -> str:
@@ -160,78 +86,48 @@ async def wait_for_auth_completion(
     reason: str,
     on_pause,
     poll_interval_sec: float = 2.5,
-    post_auth_confirm_polls: int = 2,
     max_wait_sec: float = 900.0,
-) -> Literal["auto", "manual", "timeout"]:
+) -> Literal["manual", "timeout"]:
     """
-    Block until post-auth is detected on any tab, the user clicks Resume, or timeout.
+    Block until the human clicks Resume. Re-injects the banner on all tabs after SSO navigations.
 
-    Keeps a resume banner on all open tabs across SSO navigations.
+    No auto-resume — the human confirms signup is complete by clicking the button.
     """
     print("\a", end="", flush=True)
     console.print("\n[bold yellow]⚠️  SIGN IN / SIGN UP — AGENT PAUSED ⚠️[/bold yellow]")
     console.print(f"[yellow]Reason:[/yellow] {reason}")
     console.print(
-        "Complete signup or login in the browser. The agent resumes automatically when "
-        "you reach onboarding, or click [bold]✅ Resume Agent[/bold] on any tab."
+        "Complete signup or login in the browser, then click "
+        "[bold]✅ Resume Agent[/bold] on any tab when you are done."
     )
 
     if on_pause:
         await on_pause(reason)
 
     safe_reason = _escape_js_string(reason)
-    post_auth_streak = 0
     started = time.monotonic()
-    resume_clicked = asyncio.Event()
 
-    async def wait_for_resume_click() -> None:
-        while not resume_clicked.is_set():
-            page = get_active_page()
-            if page is None or page.is_closed():
-                await asyncio.sleep(1)
-                continue
-            try:
-                await _wait_for_resume_on_page(page, safe_reason)
-                resume_clicked.set()
-                return
-            except Exception:
-                await asyncio.sleep(poll_interval_sec)
+    while True:
+        if time.monotonic() - started >= max_wait_sec:
+            console.print("[bold red]Auth hold timed out.[/bold red]")
+            return "timeout"
 
-    click_task = asyncio.create_task(wait_for_resume_click())
+        pages = [p for p in context.pages if not p.is_closed()] if context else []
+        if pages:
+            set_active_page(pages[-1])
 
-    try:
-        while not resume_clicked.is_set():
-            if time.monotonic() - started >= max_wait_sec:
-                console.print("[bold red]Auth hold timed out.[/bold red]")
-                return "timeout"
+        for p in pages:
+            await _inject_banner_nonblocking(p, safe_reason)
 
-            pages = [p for p in context.pages if not p.is_closed()] if context else []
-            if pages:
-                set_active_page(pages[-1])
-
-            any_post_auth = False
-            for p in pages:
-                if await page_appears_post_auth(p):
-                    any_post_auth = True
-                    break
-
-            if any_post_auth:
-                post_auth_streak += 1
-                if post_auth_streak >= post_auth_confirm_polls:
-                    console.print("[bold green]▶ Post-auth detected — resuming agent...[/bold green]\n")
-                    return "auto"
-            else:
-                post_auth_streak = 0
-
-            for p in pages:
-                await _inject_banner_nonblocking(p, safe_reason)
-
+        page = get_active_page()
+        if page is None or page.is_closed():
             await asyncio.sleep(poll_interval_sec)
+            continue
 
-        console.print("[bold green]▶ Resuming agent (manual)…[/bold green]\n")
-        return "manual"
-    finally:
-        resume_clicked.set()
-        click_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await click_task
+        try:
+            await _wait_for_resume_on_page(page, safe_reason)
+            console.print("[bold green]▶ Resuming agent execution...[/bold green]\n")
+            return "manual"
+        except Exception:
+            # Page navigated (e.g. SSO redirect) — re-inject on next loop iteration
+            await asyncio.sleep(poll_interval_sec)
