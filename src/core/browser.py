@@ -106,25 +106,32 @@ class BrowserManager:
 
                 await page.evaluate(f"""
                     () => new Promise((resolve) => {{
-                        const existing = document.getElementById('bff-pause-overlay');
-                        if (existing) existing.remove();
-
-                        const banner = document.createElement('div');
-                        banner.id = 'bff-pause-overlay';
-                        banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:linear-gradient(135deg,#4338CA,#6366F1);z-index:2147483647;display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1.2rem;font-family:system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);gap:1rem;';
-                        banner.innerHTML = `
-                            <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
-                                <span style="font-size:1.2rem;flex-shrink:0;">⚠️</span>
-                                <span style="color:white;font-size:0.85rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_reason}</span>
-                            </div>
-                            <button id="bff-resume-btn" style="padding:0.45rem 1.2rem;background:white;color:#4338CA;border:none;border-radius:6px;font-size:0.85rem;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;">✅ Resume Agent</button>
-                        `;
-                        document.body.appendChild(banner);
-
-                        document.getElementById('bff-resume-btn').addEventListener('click', () => {{
-                            banner.remove();
+                        let banner = document.getElementById('bff-pause-overlay');
+                        if (!banner) {{
+                            banner = document.createElement('div');
+                            banner.id = 'bff-pause-overlay';
+                            banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:linear-gradient(135deg,#4338CA,#6366F1);z-index:2147483647;display:flex;align-items:center;justify-content:space-between;padding:0.6rem 1.2rem;font-family:system-ui,sans-serif;box-shadow:0 4px 20px rgba(0,0,0,0.3);gap:1rem;';
+                            banner.innerHTML = `
+                                <div style="display:flex;align-items:center;gap:0.5rem;min-width:0;">
+                                    <span style="font-size:1.2rem;flex-shrink:0;">⚠️</span>
+                                    <span style="color:white;font-size:0.85rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{safe_reason}</span>
+                                </div>
+                                <button id="bff-resume-btn" style="padding:0.45rem 1.2rem;background:white;color:#4338CA;border:none;border-radius:6px;font-size:0.85rem;cursor:pointer;font-weight:700;white-space:nowrap;flex-shrink:0;">✅ Resume Agent</button>
+                            `;
+                            document.body.appendChild(banner);
+                        }}
+                        const btn = document.getElementById('bff-resume-btn');
+                        if (btn) {{
+                            const newBtn = btn.cloneNode(true);
+                            btn.parentNode.replaceChild(newBtn, btn);
+                            newBtn.addEventListener('click', () => {{
+                                const el = document.getElementById('bff-pause-overlay');
+                                if (el) el.remove();
+                                resolve();
+                            }});
+                        }} else {{
                             resolve();
-                        }});
+                        }}
                     }})
                 """)
                 break  # Promise resolved — user clicked Resume
@@ -132,6 +139,29 @@ class BrowserManager:
                 # Page navigated (e.g., SSO redirect), destroying the banner.
                 # Wait for the new page to settle, then re-inject.
                 await asyncio.sleep(3)
+        
+        # Post-login settle: wait until page transitions away from auth/SSO/login URLs
+        console.print("[yellow]Waiting for auth redirect to complete and page to settle...[/yellow]")
+        import time
+        start_settle = time.monotonic()
+        while time.monotonic() - start_settle < 15:
+            if self.page is None or self.page.is_closed():
+                break
+            url = self.page.url.lower()
+            
+            auth_indicators = ["accounts.spotify.com", "accounts.google.com", "appleid.apple.com", "login", "signup", "signin", "authorize", "oauth", "auth/"]
+            is_auth_url = any(ind in url for ind in auth_indicators)
+            if is_auth_url:
+                await asyncio.sleep(1.0)
+                continue
+            
+            try:
+                await self.page.wait_for_load_state("domcontentloaded", timeout=3000)
+                await self.page.wait_for_load_state("networkidle", timeout=3000)
+            except Exception:
+                pass
+            break
+
         console.print("[bold green]▶ Resuming agent execution...[/bold green]\n")
 
     async def stop(self) -> None:

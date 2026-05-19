@@ -176,6 +176,13 @@ class AgentOrchestrator:
                     elif len(recent_reasonings) >= 2 and recent_reasonings[-1] == recent_reasonings[-2]:
                         environmental_feedback += "\n\nWARNING: You are repeating your reasoning from the previous step. If this action doesn't work this time, you MUST change your strategy in the next step."
 
+                    # 6. Page Navigation Loop (Ping-Ponging between URLs)
+                    recent_urls = [h["url"] for h in rich_history[-6:]]
+                    if len(recent_urls) >= 4:
+                        if len(set(recent_urls)) == 2:
+                            if recent_urls[-4] == recent_urls[-2] and recent_urls[-3] == recent_urls[-1]:
+                                environmental_feedback += "\n\nCRITICAL NAVIGATION LOOP: You are ping-ponging back and forth between two pages. This is usually because you are mistakenly clicking a 'Back' or 'Cancel' button (often located in the top-left corner or represented by a '<' symbol) on the current page, which takes you back to the previous page, and then clicking a progress button ('Continue') to move forward again. Identify the Back button and STOP clicking it! You must select a valid option on the current page to progress, rather than returning to the previous page."
+
                 prev_dom_state = dom_state
                 prev_element_count = len(raw_elements)
                 prev_error = ""  # reset for next step
@@ -226,7 +233,15 @@ class AgentOrchestrator:
                         if el["id"] == action.element_id:
                             element_x = el.get("x")
                             element_y = el.get("y")
-                            element_text = el.get("text", "").strip() or None
+                            text = el.get("text", "").strip()
+                            if not text:
+                                parts = [f"<{el.get('tag', '')}>"]
+                                if el.get("type"):
+                                    parts.append(f"type='{el.get('type')}'")
+                                if el.get("aria_label"):
+                                    parts.append(f"aria:\"{el.get('aria_label')}\"")
+                                text = " ".join(parts)
+                            element_text = text or None
                             break
 
                 # Build base rich dictionary
@@ -281,7 +296,12 @@ class AgentOrchestrator:
                         await self.browser.pause_for_human(action.reasoning)
 
                     # Give SPAs a chance to render after the human closes the popup
-                    await asyncio.sleep(3)
+                    try:
+                        await page.wait_for_load_state("domcontentloaded", timeout=3000)
+                        await page.wait_for_load_state("networkidle", timeout=3000)
+                    except Exception:
+                        pass
+                    await asyncio.sleep(5)
                     # Clear prev state so we don't trigger the "no visible effect" warning incorrectly
                     prev_dom_state = ""
                     step_dict["success"] = True
