@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.console import Console
 
 from src.agent.actor import PlaywrightActor
+from src.agent.auth_hold import is_auth_funnel_stage, wait_for_auth_completion
 from src.agent.observer import DOMObserver
 from src.agent.planner import ActionPlanner
 from src.core.browser import BrowserManager
@@ -23,6 +24,9 @@ class AgentOrchestrator:
         self.observer = DOMObserver()
         self.planner = ActionPlanner()
         self.actor = PlaywrightActor()
+
+    def _set_active_page(self, active_page) -> None:
+        self.browser.page = active_page
 
     async def run(
         self,
@@ -242,9 +246,24 @@ class AgentOrchestrator:
 
                 if action.action_type == "pause_for_human":
                     # Do not penalize the product for our hardcoded auth rule
-                    if action.funnel_stage not in ["signup_wall", "authentication"]:
+                    if not is_auth_funnel_stage(action.funnel_stage):
                         friction_events += 1
-                    await self.browser.pause_for_human(action.reasoning)
+
+                    if is_auth_funnel_stage(action.funnel_stage):
+                        # Single auth hold: no extra steps until signup/login completes
+                        resume_mode = await wait_for_auth_completion(
+                            context=self.browser.context,
+                            get_active_page=lambda: self.browser.page,
+                            set_active_page=self._set_active_page,
+                            reason=action.reasoning,
+                            on_pause=self.browser.on_pause,
+                        )
+                        step_dict["auth_hold_resume"] = resume_mode
+                        if self.browser.page and not self.browser.page.is_closed():
+                            page = self.browser.page
+                    else:
+                        await self.browser.pause_for_human(action.reasoning)
+
                     # Give SPAs a chance to render after the human closes the popup
                     await asyncio.sleep(3)
                     # Clear prev state so we don't trigger the "no visible effect" warning incorrectly

@@ -4,7 +4,6 @@ import os
 from openai import AsyncOpenAI
 from rich.console import Console
 
-from src.memory.archetypes import select_archetypes_for_product
 from src.personas.schema import ProductAnalysis
 
 console = Console()
