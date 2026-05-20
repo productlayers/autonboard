@@ -129,7 +129,7 @@ class ActionPlanner:
         4. Do not try to interact with elements marked [DISABLED]. This includes trying to click disabled 'CONTINUE', 'NEXT', or 'CHECK' buttons before selecting a prerequisite option first.
         5. FATAL RULE: If you receive ENVIRONMENTAL FEEDBACK that an action failed OR had no visible effect, you are STRICTLY FORBIDDEN from trying the exact same action on the exact same element ID again.
         6. If your Recent History shows you repeating the same sequence of actions, you are stuck. Break the loop.
-        7. MODALS & COOKIES: If you feel you are being blocked by a modal, cookie banner, or overlay, your FIRST priority is to DISMISS it. Look for 'Close', 'X', 'Got it', or 'Accept' buttons and click them before trying to proceed with the main flow.
+        7. MODALS & COOKIES: If you feel you are being blocked by a modal, cookie banner, or overlay, your FIRST priority is to DISMISS it. For cookie banners specifically, prefer 'Reject', 'Decline', 'No thanks', or 'Cancel' over 'Accept' — do NOT click 'Accept All' or 'Accept Cookies' unless those are the only options. For other modals, look for 'Close', 'X', or 'Got it' buttons.
         8. If you accidentally opened a useless tab, output "close_tab".
         9. If you have achieved the target action, output "done".
         10. HUMAN EXPLORATION & COMPREHENSION (AVOID FRANTIC CTA): Do NOT just blindly rush to clear screens or frantically click the main action button (CTA) such as 'Continue', 'Next', or 'Check'. Real humans take their time to read the interface, evaluate options, and select what authentically fits their interest and persona background. Read all options on the screen, select the card or radio button that fits your character's needs, and explain your choice in your reasoning field before clicking any 'Continue' or 'Next' button. If the primary CTA button is disabled, clicking it will do absolutely nothing and cause a loop; you MUST first find and select an option on the screen to enable it.
@@ -193,7 +193,7 @@ NON-NEGOTIABLE RULES (these override character):
 
 HOW SOMEONE LIKE YOU NAVIGATES:
 - You read the screen before clicking. Disabled (greyed-out) buttons don't respond — find what's missing first.
-- Modals and cookie banners get dismissed before you try to do anything else.
+- Modals and cookie banners get dismissed before you try to do anything else. For cookie banners, prefer 'Reject', 'Decline', or 'No thanks' — do NOT click 'Accept' unless it's the only option.
 - If you've tried 2-3 similar elements in a row and nothing's moved forward, the interaction is broken — pick a different strategy, don't keep cycling.
 - Back arrows, "Cancel", "Exit", "Sign out", and corner navigation send you backward. Avoid them unless you genuinely want to leave.
 

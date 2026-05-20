@@ -32,12 +32,14 @@ class Narrator:
     """Synchronous TTS wrapper for live narration during agent runs."""
 
     def __init__(self, voice: str = _DEFAULT_VOICE):
+        # TTS goes directly to OpenAI — not via OpenRouter, which doesn't
+        # reliably support the /v1/audio/speech endpoint.
         self.client = OpenAI(
             api_key=os.getenv("OPENAI_API_KEY", "dummy"),
-            base_url=os.getenv("OPENAI_BASE_URL"),
+            # Intentionally no base_url — always hit api.openai.com for TTS.
         )
         self.voice = voice
-        self.tts_model = "openai/tts-1"  # OpenRouter model path
+        self.tts_model = "tts-1"
 
     def narrate(self, text: str) -> bytes | None:
         """Convert text to speech. Returns raw MP3 bytes, or None on failure."""
