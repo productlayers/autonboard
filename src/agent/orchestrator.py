@@ -13,7 +13,7 @@ from src.agent.planner import ActionPlanner
 from src.core.browser import BrowserManager
 from src.personas.schema import Persona
 
-console = Console()
+console = Console(stderr=True)  # stdout is a broken pipe inside Streamlit
 
 
 class AgentOrchestrator:

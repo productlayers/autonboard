@@ -6,7 +6,7 @@ from rich.console import Console
 
 from src.personas.schema import ProductAnalysis
 
-console = Console()
+console = Console(stderr=True)  # stdout is a broken pipe inside Streamlit
 
 
 class PersonaGenerator:
