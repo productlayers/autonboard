@@ -280,6 +280,7 @@ class AgentOrchestrator:
                     "latency_ms": 0,
                     "tokens": step_tokens,
                     "cached_tokens": step_cached_tokens,
+                    "prompt_version": self.planner.prompt_version,
                 }
 
                 # 3. Handle Special States
