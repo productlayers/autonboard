@@ -201,8 +201,8 @@ class AgentOrchestrator:
                 prev_element_count = len(raw_elements)
                 prev_error = ""  # reset for next step
 
-                # 2. Plan (sleep briefly to prevent Groq 429 API rate limits with large image payloads)
-                await asyncio.sleep(6)
+                # 2. Plan (brief throttle to pace LLM calls; sized for OpenRouter's headroom, not Groq's)
+                await asyncio.sleep(2)
                 step_start_time = time.time()
 
                 action, step_tokens = await self.planner.plan_next_action(
