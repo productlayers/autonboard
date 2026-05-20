@@ -5,6 +5,34 @@
 
 ---
 
+## Tier 1 — Banned Phrase List: Keep Current
+
+### Problem
+The cross-step phrase repetition rule works but the banned list goes stale. "Catching my eye" was banned and dropped off; "right there" and "calling my name" emerged to replace it — visible across nearly every step of recent runs. The list needs updating after each batch of runs.
+
+### Fix
+Scan the latest 5 runs after each session and update the banned phrases in both v1 and v2 prompts. Current additions needed: "right there", "calling my name", "practically inviting". Consider whether to hardcode the list or load it dynamically from a file so it can be updated without touching the prompt code.
+
+### Acceptance
+- No single phrase appears more than once across a 10-step run
+- Banned list reviewed and updated at least every 5 runs
+
+---
+
+## Tier 1 — Repeated Click on Same Element Without Progress
+
+### Problem
+Agent sometimes clicks the same interactive element (e.g. a search bar, a button) 2-3 times in a row without triggering a visible effect — not because of a loop (element IDs differ or DOM shifts slightly) but because the click isn't registering or the element requires a different interaction (focus, double-click, keyboard event). Observed in Spotify run steps 5-7: three consecutive attempts on the search bar before successfully typing.
+
+### Fix
+Tighten the environmental feedback for repeated same-area clicks: if the agent clicks elements within close spatial proximity (within ~50px) 2 times in a row with no visible DOM change, inject a warning to try a different interaction type — e.g. "This area may require typing directly rather than clicking first" or "Try using the `type` action instead of `click`." This is distinct from the sibling loop detector which targets navigation elements.
+
+### Acceptance
+- Search bar / text input interactions resolve in 1-2 steps not 3+
+- No false positives on legitimate multi-click flows (e.g. selecting then confirming)
+
+---
+
 ## Tier 1 — Telemetry & Observability (Completed)
 
 ### ✅ Rich step-level telemetry
