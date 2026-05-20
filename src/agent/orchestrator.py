@@ -108,6 +108,20 @@ class AgentOrchestrator:
 
                 current_url = page.url
 
+                # Direct Cloudflare CAPTCHA / security challenge detection
+                if "Attention Required!" in page_title or "cloudflare" in page_title.lower():
+                    console.print("[bold yellow]⚠️ Cloudflare CAPTCHA / Security verification detected![/bold yellow]")
+                    await self.browser.pause_for_human(
+                        "Cloudflare security verification / CAPTCHA detected. Please solve the challenge in the browser window to proceed."
+                    )
+                    # Settle and re-observe
+                    try:
+                        await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                    except Exception:
+                        pass
+                    dom_state, base64_image, raw_elements, page_title = await self.observer.observe(page)
+                    current_url = page.url
+
                 environmental_feedback = ""
                 if prev_error:
                     environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action failed with browser error: '{prev_error}'. The element might be hidden, blocked by a popup, or unclickable. You must try a different approach.\n"
