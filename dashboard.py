@@ -822,19 +822,6 @@ with tab_new:
         if not product_url.startswith("http"):
             product_url = "https://" + product_url
 
-        # Unlock browser autoplay for the session: play a silent clip immediately
-        # on the user's click gesture so subsequent st.audio(autoplay=True) calls work.
-        if narration_on:
-            st_components.html("""
-                <script>
-                  (function() {
-                    var a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAA"
-                      + "EAAQARAAAAIgAAABAAEAZGF0YQAAAAA=");
-                    a.play().catch(function(){});
-                  })();
-                </script>
-            """, height=0)
-
         st.session_state.run_active = True
 
         # ── Phase 0: Product Discovery ────────────────────────────────────
@@ -903,7 +890,7 @@ with tab_new:
         counters = {"step": 0, "friction": 0, "tokens": 0}
         max_steps = 30
         
-        # Initialize narrator if toggle is on — voice matched to persona's tech literacy
+        # Initialize narrator if toggle is on — voice params matched to persona's tech literacy
         narrator = Narrator(voice=voice_for_persona(target_persona)) if narration_on else None
 
         def on_step(step_dict):
@@ -931,14 +918,13 @@ with tab_new:
             progress = min(counters["step"] / max_steps, 1.0)
             progress_bar.progress(progress, text=f"Step {counters['step']}/{max_steps}")
             
-            # Live narration
+            # Live narration — Web Speech API, runs entirely in browser (no API cost)
             if narrator:
                 reasoning = step_dict.get("reasoning", "")
                 if reasoning:
-                    audio_bytes = narrator.narrate(reasoning)
-                    if audio_bytes:
-                        with steps_container:
-                            st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                    js_snippet = narrator.narrate(reasoning)
+                    if js_snippet:
+                        st_components.html(js_snippet, height=0)
             
             # Update sidebar stats
             sidebar_stats.markdown(f"""
