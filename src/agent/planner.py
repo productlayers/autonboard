@@ -187,7 +187,7 @@ class ActionPlanner:
         INTERACTIVE ELEMENTS ON SCREEN (Use these numeric labels for clicking/typing):
         {dom_state}
         
-        Look at the screenshot and your history. What is the single most effective next step to reach your goal: '{target_action}'?
+        Look at the screenshot and your recent history. You are a first-time user exploring this product. You loosely want to '{target_action}', but you do NOT have a fixed plan and you are NOT executing a checklist. Notice what stands out on the screen, react as the persona would, and choose what you'd naturally do next — even if that means lingering on something interesting before progressing the main flow.
         """
 
         messages = [
