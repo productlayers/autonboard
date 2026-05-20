@@ -3,7 +3,7 @@ import asyncio
 from playwright.async_api import BrowserContext, Page, async_playwright
 from rich.console import Console
 
-console = Console()
+console = Console(stderr=True)  # stdout is a broken pipe inside Streamlit
 
 
 class BrowserManager:

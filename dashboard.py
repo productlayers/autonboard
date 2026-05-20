@@ -17,7 +17,8 @@ from src.agent.reflector import AuditReflector
 from src.evals.metrics import EvalMetrics
 from src.insights.analyzer import UXAnalyzer
 from src.insights.logger import RunLogger
-from src.insights.narrator import Narrator
+import streamlit.components.v1 as st_components
+from src.insights.narrator import Narrator, voice_for_persona
 from src.personas.generator import PersonaGenerator
 
 load_dotenv()
@@ -383,6 +384,64 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     line-height: 1.8;
     margin-bottom: 1rem;
 }
+
+/* Goal Framing block (insights → Story tab) */
+.framing-wrap {
+    background: linear-gradient(135deg, #161628 0%, #1a1a30 100%);
+    border: 1px solid #2e2e54;
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem 1.2rem 1.3rem;
+    margin-bottom: 1.2rem;
+}
+.framing-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a78bfa;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.framing-row { display: flex; gap: 0.9rem; margin-bottom: 0.9rem; }
+.framing-cell {
+    flex: 1;
+    background: #0f0f1c;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 0.8rem 0.95rem;
+}
+.framing-cell-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+.framing-cell-value {
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+.framing-cell.researched .framing-cell-label { color: #c7d2fe; }
+.framing-cell.researched { border-color: #4338ca; }
+.framing-alignment {
+    background: #11192e;
+    border-left: 3px solid #6366f1;
+    border-radius: 0 8px 8px 0;
+    padding: 0.7rem 0.95rem;
+    color: #cbd5e1;
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+.framing-alignment-label {
+    color: #818cf8;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+    display: block;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -547,6 +606,30 @@ def render_insights(insights_data: dict, run_data: dict | None = None):
     
     # ── TAB: Story ──
     with tab_story:
+        # Goal Framing — interpret everything below against the right success criterion.
+        # Reads from run_data (live runs plumb HVA in; historical runs have it in runs.jsonl).
+        pm_goal = (run_data or {}).get("target_action", "")
+        research_hva = (run_data or {}).get("llm_inferred_hva", "")
+        alignment = (run_data or {}).get("hva_audit_alignment", "")
+        if pm_goal or research_hva:
+            st.markdown(f"""<div class="framing-wrap">
+                <div class="framing-label">🎯 Goal Framing</div>
+                <div class="framing-row">
+                    <div class="framing-cell">
+                        <div class="framing-cell-label">Your Hypothesis</div>
+                        <div class="framing-cell-value">{pm_goal or "—"}</div>
+                    </div>
+                    <div class="framing-cell researched">
+                        <div class="framing-cell-label">Research-Backed HVA</div>
+                        <div class="framing-cell-value">{research_hva or "—"}</div>
+                    </div>
+                </div>
+                {f'''<div class="framing-alignment">
+                    <span class="framing-alignment-label">Alignment</span>
+                    {alignment}
+                </div>''' if alignment else ''}
+            </div>""", unsafe_allow_html=True)
+
         narrative = insights_data.get("narrative", "")
         if narrative:
             # Extract first sentence as a pull-quote
@@ -718,8 +801,25 @@ with tab_new:
     with st.form("audit_form"):
         product_url = st.text_input("🔗 Product URL", placeholder="https://www.notion.so", help="The landing page or signup page of the product you want to audit.")
         pm_hva = st.text_input("🎯 Success Goal", placeholder="Create a new page and add a heading", help="What's the first meaningful thing you want a new user to accomplish? This is the goal your AI persona will try to reach.")
-        narration_on = st.toggle("🔊 Live Narration", value=False, help="When enabled, the AI persona's reasoning is read aloud at each step.")
-        
+        # 🔊 Live Narration hidden — Web Speech API has two blockers:
+        # (1) robotic OS voices, no neural TTS quality
+        # (2) each st_components.html() call is a separate iframe so
+        #     speechSynthesis.cancel() can't stop the previous utterance → overlap
+        # Revisit when ElevenLabs free tier or OpenAI TTS is wired up.
+        narration_on = False  # st.toggle("🔊 Live Narration", value=False, ...)
+
+        prompt_version = st.radio(
+            "🧪 A/B Test",
+            options=["v1", "v2"],
+            index=0,
+            horizontal=True,
+            captions=[
+                "v1 — Original system prompt (verbose, 16 rules, ~2,200 tokens)",
+                "v2 — Refactored system prompt (persona-first, 4 rules, ~700 tokens)",
+            ],
+            help="Active test: system prompt version. Pick a variant per run to compare voice quality, cost, and success rate side-by-side. This control will host future A/B tests (DOM trimming, model swaps, retrieval modes) as they ship.",
+        )
+
         submitted = st.form_submit_button("🚀 Start UX Audit", use_container_width=True, type="primary")
 
     if submitted and product_url and pm_hva:
@@ -759,23 +859,8 @@ with tab_new:
             analysis = asyncio.run(generate_personas())
             phase1.update(label="✅ AI personas generated", state="complete")
 
-        # HVA Audit Comparison
-        st.markdown("### 🎯 Success Goal Comparison")
-        st.caption("We compare your intended success goal with what our AI thinks the product's natural first milestone is.")
-        col_pm, col_llm = st.columns(2)
-        with col_pm:
-            st.markdown(f"""<div class="goal-card">
-                <h4>Your Success Goal</h4>
-                <p>{pm_hva}</p>
-            </div>""", unsafe_allow_html=True)
-        with col_llm:
-            st.markdown(f"""<div class="goal-card">
-                <h4>AI-Inferred Goal</h4>
-                <p>{analysis.inferred_high_value_action}</p>
-            </div>""", unsafe_allow_html=True)
-        
-        with st.expander("📝 Goal Alignment Analysis", expanded=True):
-            st.info(analysis.pm_hypothesis_alignment)
+        # NOTE: HVA comparison moved to insights section (Story tab) — it's a finding
+        # to interpret findings against, not a setup parameter to show before the run.
 
         # Persona Cards
         st.markdown("### 👥 AI-Generated Personas")
@@ -810,8 +895,8 @@ with tab_new:
         counters = {"step": 0, "friction": 0, "tokens": 0}
         max_steps = 30
         
-        # Initialize narrator if toggle is on
-        narrator = Narrator() if narration_on else None
+        # Initialize narrator if toggle is on — voice params matched to persona's tech literacy
+        narrator = Narrator(voice=voice_for_persona(target_persona)) if narration_on else None
 
         def on_step(step_dict):
             counters["step"] = step_dict.get("step", counters["step"] + 1)
@@ -838,14 +923,13 @@ with tab_new:
             progress = min(counters["step"] / max_steps, 1.0)
             progress_bar.progress(progress, text=f"Step {counters['step']}/{max_steps}")
             
-            # Live narration
+            # Live narration — Web Speech API, runs entirely in browser (no API cost)
             if narrator:
                 reasoning = step_dict.get("reasoning", "")
                 if reasoning:
-                    audio_bytes = narrator.narrate(reasoning)
-                    if audio_bytes:
-                        with steps_container:
-                            st.audio(audio_bytes, format="audio/mp3", autoplay=True)
+                    js_snippet = narrator.narrate(reasoning)
+                    if js_snippet:
+                        st_components.html(js_snippet, height=0)
             
             # Update sidebar stats
             sidebar_stats.markdown(f"""
@@ -866,7 +950,7 @@ with tab_new:
         # Run the orchestrator — always log, even on crash/interrupt
         run_results = None
         async def run_orchestrator():
-            orchestrator = AgentOrchestrator(headless=False, on_pause=on_pause)
+            orchestrator = AgentOrchestrator(headless=False, on_pause=on_pause, prompt_version=prompt_version)
             return await orchestrator.run(
                 persona=target_persona,
                 product_name=product_name,
@@ -963,7 +1047,15 @@ with tab_new:
                     insight_status.update(label=f"❌ Insight extraction failed: {e}", state="error")
             
             if findings:
-                render_insights(findings.model_dump(), run_results)
+                # Plumb HVA fields into run_data so the Goal Framing block in render_insights
+                # works the same for live runs as for historical runs from runs.jsonl.
+                run_results_with_hva = {
+                    **run_results,
+                    "target_action": pm_hva,
+                    "llm_inferred_hva": analysis.inferred_high_value_action,
+                    "hva_audit_alignment": analysis.pm_hypothesis_alignment,
+                }
+                render_insights(findings.model_dump(), run_results_with_hva)
 
             is_success = run_results.get("run_success", False)
             status_class = "status-success" if is_success else "status-failed"

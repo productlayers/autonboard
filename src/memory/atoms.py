@@ -89,15 +89,20 @@ def write_atoms(atoms: list[Atom], path: Path = ATOMS_PATH) -> int:
 
 
 def load_atoms(path: Path = ATOMS_PATH) -> list[Atom]:
-    """Load all atoms from the JSONL store. Returns empty list if no file yet."""
+    """Load all atoms from the JSONL store. Returns empty list if no file yet.
+    Skips malformed lines with a warning rather than crashing the run."""
     if not path.exists():
         return []
     out: list[Atom] = []
     with open(path) as f:
-        for line in f:
+        for i, line in enumerate(f, 1):
             line = line.strip()
-            if line:
+            if not line:
+                continue
+            try:
                 out.append(Atom(**json.loads(line)))
+            except Exception as e:
+                print(f"[atoms] WARNING: skipping malformed atom on line {i}: {e}")
     return out
 
 

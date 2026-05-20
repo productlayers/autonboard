@@ -17,10 +17,10 @@ class Persona(BaseModel):
 class ProductAnalysis(BaseModel):
     product_name: str = Field(description="The name of the product")
     inferred_high_value_action: str = Field(
-        description="The action the product is designed to push users toward during onboarding (e.g., 'Create a workspace', 'Run first pipeline')"
+        description="The first action a new user could take in session one that retention research suggests would most predict return visits — reasoned from product category knowledge, NOT from this product's specific onboarding flow."
     )
     pm_hypothesis_alignment: str = Field(
-        description="Your brief analysis of whether the PM's hypothesized HVA aligns with your inferred HVA. Note any discrepancies."
+        description="Brief analysis of whether the PM's hypothesized HVA aligns with the research-inferred HVA. Flag if the PM's hypothesis is too shallow (e.g. account creation) or misses the real activation moment."
     )
     target_personas: list[Persona] = Field(
         description="3 distinct personas representing the core user segments", min_length=3, max_length=3

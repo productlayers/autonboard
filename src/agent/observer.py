@@ -120,6 +120,12 @@ class DOMObserver:
             const centerX = Math.round(rect.left + window.scrollX + (rect.width / 2));
             const centerY = Math.round(rect.top + window.scrollY + (rect.height / 2));
             
+            // Is this element at least partially visible in the current viewport?
+            const inViewport = (
+                rect.top < window.innerHeight && rect.bottom > 0 &&
+                rect.left < window.innerWidth && rect.right > 0
+            );
+
             elements.push({
                 id: bffId,
                 tag: el.tagName.toLowerCase(),
@@ -130,11 +136,24 @@ class DOMObserver:
                 aria_label: ariaLabel,
                 disabled: disabled,
                 x: centerX,
-                y: centerY
+                y: centerY,
+                in_viewport: inViewport
             });
         });
-        
-        return elements;
+
+        // Sort: viewport-visible elements first (top-to-bottom), then off-screen (top-to-bottom).
+        // This ensures the agent sees what's on screen first — matching the screenshot.
+        // Off-screen elements are still included so scrolling + re-observe surfaces them.
+        elements.sort((a, b) => {
+            if (a.in_viewport && !b.in_viewport) return -1;
+            if (!a.in_viewport && b.in_viewport) return 1;
+            return a.y - b.y;
+        });
+
+        // Cap total elements. With viewport-first ordering the agent never misses
+        // something visible — if a target is off-screen it scrolls, re-observes,
+        // and the element moves into the viewport-priority slots.
+        return elements.slice(0, 150);
     }
     """
 

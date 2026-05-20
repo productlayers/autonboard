@@ -60,10 +60,6 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
     generator = PersonaGenerator()
     analysis = await generator.analyze_product(product_name, product_desc, pm_hva)
 
-    console.print(f"[bold]PM's Hypothesized HVA:[/bold] {pm_hva}")
-    console.print(f"[bold]LLM's Inferred HVA:[/bold] {analysis.inferred_high_value_action}")
-    console.print(f"[bold]Audit Alignment:[/bold] {analysis.pm_hypothesis_alignment}\n")
-
     console.print("[bold]Generated Personas:[/bold]")
     for p in analysis.target_personas:
         console.print(f"- {p.name} (Tech Literacy: {p.technical_literacy})")
@@ -132,22 +128,37 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
             pm_hypothesis_alignment=analysis.pm_hypothesis_alignment
         )
 
-    # 4. Print Current Metrics
+    # 4. HVA Insight — surfaced here as a finding, not a setup parameter
+    console.print("\n[bold blue]=== HVA Audit ===[/bold blue]")
+    console.print(f"[bold]PM's Hypothesis:[/bold]       {pm_hva}")
+    console.print(f"[bold]Research-Inferred HVA:[/bold] {analysis.inferred_high_value_action}")
+    console.print(f"[bold]Alignment:[/bold]             {analysis.pm_hypothesis_alignment}")
+
+    # 5. Print Current Metrics
     metrics = EvalMetrics().get_metrics()
     console.print("\n[bold]Current Global Metrics:[/bold]")
     console.print(f"Total Runs: {metrics['total_runs']}")
     console.print(f"Completion Rate: {metrics['completion_rate']:.0%}")
     console.print(f"Avg Friction Events (Human Interventions): {metrics['avg_friction_events']:.1f}")
 
-    # 5. Keep browser open for inspection if NOT headless
-    if not headless:
-        console.print("\n[bold yellow]Audit complete. Keeping browser open for inspection...[/bold yellow]")
-        console.print("[yellow]Press Ctrl+C again to close the browser and exit.[/yellow]")
+    # 5. Keep browser open for inspection if NOT headless.
+    # When the user manually closes the window, clean up Playwright fully so
+    # no Chrome process lingers in the Dock.
+    if not headless and orchestrator.browser._browser is not None:
+        console.print("\n[bold yellow]Audit complete. Browser is yours — close it when done.[/bold yellow]")
+        closed = asyncio.Event()
+        # "disconnected" fires when the user manually closes the Chrome window
+        orchestrator.browser._browser.on("disconnected", lambda _: closed.set())
         try:
-            while True:
-                await asyncio.sleep(3600) # Wait for an hour (or until Ctrl+C)
+            await closed.wait()
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
+        finally:
+            try:
+                await orchestrator.browser.stop()
+            except Exception:
+                pass
+            console.print("[dim]Browser closed. Playwright stopped.[/dim]")
 
 
 def main():

@@ -11,7 +11,7 @@ from typing import Literal
 from playwright.async_api import BrowserContext, Page
 from rich.console import Console
 
-console = Console()
+console = Console(stderr=True)  # stdout is a broken pipe inside Streamlit
 
 AUTH_FUNNEL_STAGES = frozenset({"signup_wall", "authentication"})
 

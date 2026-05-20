@@ -13,16 +13,17 @@ from src.agent.planner import ActionPlanner
 from src.core.browser import BrowserManager
 from src.personas.schema import Persona
 
-console = Console()
+console = Console(stderr=True)  # stdout is a broken pipe inside Streamlit
 
 
 class AgentOrchestrator:
     """The main state machine loop for the autonomous browser agent."""
 
-    def __init__(self, headless: bool = False, on_pause=None):
+    def __init__(self, headless: bool = False, on_pause=None, prompt_version: str | None = None):
         self.browser = BrowserManager(headless=headless, on_pause=on_pause)
         self.observer = DOMObserver()
-        self.planner = ActionPlanner()
+        # prompt_version is forwarded to the planner; None falls back to env var or default
+        self.planner = ActionPlanner(prompt_version=prompt_version)
         self.actor = PlaywrightActor()
 
     def _set_active_page(self, active_page) -> None:
@@ -76,6 +77,7 @@ class AgentOrchestrator:
         }
 
         try:
+            post_auth_note = ""  # Injected into next step's environmental_feedback after human logs in
             for step in range(1, max_steps + 1):
                 console.print(f"\n[bold]Step {step}/{max_steps}[/bold]")
 
@@ -123,6 +125,9 @@ class AgentOrchestrator:
                     current_url = page.url
 
                 environmental_feedback = ""
+                if post_auth_note:
+                    environmental_feedback += post_auth_note
+                    post_auth_note = ""  # consume once
                 if prev_error:
                     environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action failed with browser error: '{prev_error}'. The element might be hidden, blocked by a popup, or unclickable. You must try a different approach.\n"
                 elif step > 1 and dom_state == prev_dom_state:
@@ -205,7 +210,7 @@ class AgentOrchestrator:
                 await asyncio.sleep(2)
                 step_start_time = time.time()
 
-                action, step_tokens = await self.planner.plan_next_action(
+                action, step_tokens, step_cached_tokens = await self.planner.plan_next_action(
                     persona=persona,
                     target_action=target_action,
                     current_url=current_url,
@@ -233,8 +238,9 @@ class AgentOrchestrator:
                 self.partial_results["total_tokens"] = total_tokens
                 self.partial_results["friction_events"] = friction_events
 
+                cache_note = f", {step_cached_tokens:,} cached" if step_cached_tokens else ""
                 console.print(
-                    f"[{persona.name}] decided to: [yellow]{action.action_type}[/yellow] on element [yellow]{action.element_id}[/yellow] ({step_tokens} tokens)"
+                    f"[{persona.name}] decided to: [yellow]{action.action_type}[/yellow] on element [yellow]{action.element_id}[/yellow] ({step_tokens} tokens{cache_note})"
                 )
                 console.print(f"Reasoning: {action.reasoning}")
 
@@ -277,6 +283,9 @@ class AgentOrchestrator:
                     "success": False,
                     "error_msg": "",
                     "latency_ms": 0,
+                    "tokens": step_tokens,
+                    "cached_tokens": step_cached_tokens,
+                    "prompt_version": self.planner.prompt_version,
                 }
 
                 # 3. Handle Special States
@@ -304,6 +313,12 @@ class AgentOrchestrator:
                             on_pause=self.browser.on_pause,
                         )
                         step_dict["auth_hold_resume"] = resume_mode
+                        post_auth_note = (
+                            "SYSTEM NOTE: A human just completed login on your behalf. "
+                            "You are now fully authenticated and inside the product. "
+                            "Do NOT mention login or authentication as friction in your reasoning — "
+                            "treat yourself as already logged in and focus on what's in front of you."
+                        )
                         if self.browser.page and not self.browser.page.is_closed():
                             page = self.browser.page
                     else:

@@ -1,0 +1,43 @@
+#!/bin/bash
+# BFF-specific pre-commit checks.
+# Called by ~/.git-hooks/pre-commit after generic checks pass.
+
+set -e
+
+# 1. Validate atoms.jsonl parses cleanly against the Atom schema
+if git diff --cached --name-only | grep -q "atoms.jsonl"; then
+    echo "  Validating atoms.jsonl schema..."
+    uv run python3 -c "
+from src.memory.atoms import load_atoms
+import sys
+atoms = load_atoms()
+# load_atoms prints warnings for bad lines — fail if any were skipped
+import io, contextlib
+buf = io.StringIO()
+with contextlib.redirect_stdout(buf):
+    atoms2 = load_atoms()
+warnings = [l for l in buf.getvalue().splitlines() if 'WARNING' in l]
+if warnings:
+    print('FAIL: malformed atoms detected:')
+    for w in warnings: print(' ', w)
+    sys.exit(1)
+print(f'  OK: {len(atoms)} atoms valid')
+" || exit 1
+fi
+
+# 2. Key modules import without errors
+echo "  Checking key module imports..."
+uv run python3 -c "
+import src.memory.atoms
+import src.personas.schema
+import src.insights.narrator
+import src.agent.planner
+" || { echo "  FAIL: module import error"; exit 1; }
+echo "  OK: imports clean"
+
+# 3. dashboard.py syntax (it's never staged via normal py check since it's root-level)
+if git diff --cached --name-only | grep -q "dashboard.py"; then
+    echo "  Checking dashboard.py syntax..."
+    uv run python3 -m py_compile dashboard.py || { echo "  FAIL: dashboard.py syntax error"; exit 1; }
+    echo "  OK: dashboard.py"
+fi

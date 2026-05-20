@@ -5,6 +5,34 @@
 
 ---
 
+## Tier 1 — Banned Phrase List: Keep Current
+
+### Problem
+The cross-step phrase repetition rule works but the banned list goes stale. "Catching my eye" was banned and dropped off; "right there" and "calling my name" emerged to replace it — visible across nearly every step of recent runs. The list needs updating after each batch of runs.
+
+### Fix
+Scan the latest 5 runs after each session and update the banned phrases in both v1 and v2 prompts. Current additions needed: "right there", "calling my name", "practically inviting". Consider whether to hardcode the list or load it dynamically from a file so it can be updated without touching the prompt code.
+
+### Acceptance
+- No single phrase appears more than once across a 10-step run
+- Banned list reviewed and updated at least every 5 runs
+
+---
+
+## Tier 1 — Repeated Click on Same Element Without Progress
+
+### Problem
+Agent sometimes clicks the same interactive element (e.g. a search bar, a button) 2-3 times in a row without triggering a visible effect — not because of a loop (element IDs differ or DOM shifts slightly) but because the click isn't registering or the element requires a different interaction (focus, double-click, keyboard event). Observed in Spotify run steps 5-7: three consecutive attempts on the search bar before successfully typing.
+
+### Fix
+Tighten the environmental feedback for repeated same-area clicks: if the agent clicks elements within close spatial proximity (within ~50px) 2 times in a row with no visible DOM change, inject a warning to try a different interaction type — e.g. "This area may require typing directly rather than clicking first" or "Try using the `type` action instead of `click`." This is distinct from the sibling loop detector which targets navigation elements.
+
+### Acceptance
+- Search bar / text input interactions resolve in 1-2 steps not 3+
+- No false positives on legitimate multi-click flows (e.g. selecting then confirming)
+
+---
+
 ## Tier 1 — Telemetry & Observability (Completed)
 
 ### ✅ Rich step-level telemetry
@@ -105,6 +133,23 @@ Add a `--mode directed|exploratory` CLI flag:
 - Compare directed vs. exploratory completion rates for the same product
 - If exploratory completion rate is low but directed is high → the funnel has a **discoverability** problem
 - If both are low → the product has a **fundamental usability** problem
+
+---
+
+## Tier 2 — DOM Trimming: Handle 150+ Visible Elements on Dense Pages
+
+### Problem
+The observer caps at 150 elements using viewport-first ordering. This handles most pages correctly — the agent sees what's on screen and scrolls to reach off-screen elements. But dense dashboards (e.g. a template gallery, a settings page, a data table) can have 150+ interactive elements visible simultaneously, causing viewport-visible elements to get cut off before the cap is reached.
+
+### Fix
+Add a second filtering pass before the cap:
+1. **Deduplicate by label** — if 10 nav items all say "Home", "Dashboard" etc. and one is clearly active, drop the redundant ones
+2. **Deprioritize structural noise** — footer links, cookie-policy links, generic "×" close buttons on non-blocking banners can be ranked below primary content elements
+3. **Optionally raise the cap dynamically** — if all 150 slots are viewport-visible, bump to 200 for that step only
+
+### Acceptance
+- A template gallery page (Airtable, Notion) with 200+ visible cards still surfaces the relevant content cards within the cap
+- No regression on standard pages (150 or fewer visible elements)
 
 ---
 
@@ -209,6 +254,43 @@ Computed at log time by aggregating steps within the same `funnel_stage`. Shows 
 **Tech:** Streamlit with `plotly` for charts, `streamlit-image-select` for screenshot browsing.
 
 **Files:** `dashboard.py`, `src/viz/` [NEW dir]
+
+---
+
+## Tier 2 — Browser Cleanup on Crash
+
+### Problem
+`orchestrator.py` calls `browser.stop()` only on the happy path (line ~368, headless only) and the call is *not* inside a `try/finally`. If anything above it throws — observation failure, planner exception, network blip — the Playwright Chrome process leaks. These are silent: they pile up in the Dock / process table and only surface when the machine slows down. Headless crashes are especially hard to notice because there's no visible window.
+
+### Fix
+Wrap the orchestrator run loop in `try/finally` and call `await self.browser.stop()` in the `finally`, gated only by "did we start the browser." Non-headless inspection-hold should still happen in `main.py` after the orchestrator returns (already done — `main.py` waits on the context `close` event, then calls `browser.stop()`).
+
+### Acceptance
+- Force a crash mid-run in headless mode → no `Google Chrome for Testing` process left behind (`ps aux | grep -i chrom`).
+- Force a crash mid-run in headed mode → window stays open for inspection; closing it triggers cleanup.
+
+---
+
+## Tier 2 — Live Narration (Re-enable with proper TTS)
+
+### Problem
+Web Speech API has two blockers that make narration unusable:
+1. **Quality**: OS-level voices are robotic with no prosody control — sounds nothing like a real persona
+2. **Overlap**: `st_components.html()` creates a new iframe per call, so `speechSynthesis.cancel()` in iframe N can't stop playback in iframe N-1 — narrations pile up and talk over each other
+
+Toggle is hidden in the dashboard until fixed.
+
+### Fix
+Replace Web Speech API with a proper neural TTS service. Options in priority order:
+- **ElevenLabs free tier** (10k chars/month) — best voice quality, persona-specific voice cloning possible
+- **OpenAI TTS-1** — good quality, but requires a direct OpenAI API key (not via OpenRouter)
+
+For the overlap issue: maintain a single persistent iframe that receives text via `postMessage` and manages the speech queue internally.
+
+### Acceptance
+- Toggle re-enabled in dashboard
+- No overlap between step narrations
+- Voice quality clearly reflects persona character (not robotic)
 
 ---
 
