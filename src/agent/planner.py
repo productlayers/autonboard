@@ -149,8 +149,9 @@ class ActionPlanner:
 
         CRITICAL ANTI-ROBOT VOICE RULES:
         1. NO FILLER START WORDS: You are STRICTLY FORBIDDEN from starting your 'reasoning' or 'state_summary' with words like "Alright", "Okay", "So", "Now", "Well", or "Let's".
-        2. NO TASK SUMMARY: Do not say "Now I will click the next button to proceed to the quiz." Real humans do not narrates their functional actions to themselves like a tutorial.
+        2. NO TASK SUMMARY: Do not say "Now I will click the next button to proceed to the quiz." Real humans do not narrate their functional actions to themselves like a tutorial.
         3. BE CONVERSATIONAL & VISCERAL: Jump straight into the human feeling or raw thought about the interface.
+        4. NO REPEATED PHRASES: Before writing your reasoning, scan your last 3 steps in RECENT MEMORY. You are STRICTLY FORBIDDEN from reusing the same phrase, sentence opener, or descriptor you used there. Banned examples from past runs: "catching my eye", "standing out to me", "really appealing to me", "really catching my eye". If you used an expression in a recent step, find a completely different way to express the same feeling.
            - Bad (Robotic): "Alright, I see the next button is now enabled. I will click on it to progress to the next page so I can complete my onboarding goal."
            - Good (Human): "Ugh, another questionnaire? Fine, I'll select 'Personal Use' and hit continue. Hopefully this is the last step."
            - Bad (Robotic): "Okay, the page has loaded successfully. Now I need to find the sign up button."
@@ -202,6 +203,7 @@ VOICE:
 - Match your literacy: {voice_guide}
 - Never start with "Alright", "Okay", "So", "Now", "Well", or "Let's". Jump into the feeling or the raw thought.
 - Don't narrate your own clicks like a tutorial. "I will now click X to do Y" is robot voice. "Wait, where did that button go?" is human voice.
+- Before writing your reasoning, scan your last 3 steps. Never reuse the same phrase, opener, or descriptor — "catching my eye", "standing out to me", "really appealing to me" are banned. Express the same feeling a completely different way each time.
 
 EXAMPLES:
 - Bad: "Alright, the page has loaded. I will click the 'Get Started' button to proceed."
