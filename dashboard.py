@@ -17,7 +17,8 @@ from src.agent.reflector import AuditReflector
 from src.evals.metrics import EvalMetrics
 from src.insights.analyzer import UXAnalyzer
 from src.insights.logger import RunLogger
-from src.insights.narrator import Narrator
+import streamlit.components.v1 as st_components
+from src.insights.narrator import Narrator, voice_for_persona
 from src.personas.generator import PersonaGenerator
 
 load_dotenv()
@@ -821,6 +822,19 @@ with tab_new:
         if not product_url.startswith("http"):
             product_url = "https://" + product_url
 
+        # Unlock browser autoplay for the session: play a silent clip immediately
+        # on the user's click gesture so subsequent st.audio(autoplay=True) calls work.
+        if narration_on:
+            st_components.html("""
+                <script>
+                  (function() {
+                    var a = new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAA"
+                      + "EAAQARAAAAIgAAABAAEAZGF0YQAAAAA=");
+                    a.play().catch(function(){});
+                  })();
+                </script>
+            """, height=0)
+
         st.session_state.run_active = True
 
         # ── Phase 0: Product Discovery ────────────────────────────────────
@@ -889,8 +903,8 @@ with tab_new:
         counters = {"step": 0, "friction": 0, "tokens": 0}
         max_steps = 30
         
-        # Initialize narrator if toggle is on
-        narrator = Narrator() if narration_on else None
+        # Initialize narrator if toggle is on — voice matched to persona's tech literacy
+        narrator = Narrator(voice=voice_for_persona(target_persona)) if narration_on else None
 
         def on_step(step_dict):
             counters["step"] = step_dict.get("step", counters["step"] + 1)
