@@ -803,15 +803,15 @@ with tab_new:
         narration_on = st.toggle("🔊 Live Narration", value=False, help="When enabled, the AI persona's reasoning is read aloud at each step.")
 
         prompt_version = st.radio(
-            "🧠 Prompt Version",
+            "🧪 A/B Test",
             options=["v1", "v2"],
             index=0,
             horizontal=True,
             captions=[
-                "Original — verbose, 16 numbered rules, ~2,200 tokens",
-                "Refactored — persona-first, 4 hard rules, ~700 tokens (3x lighter)",
+                "v1 — Original system prompt (verbose, 16 rules, ~2,200 tokens)",
+                "v2 — Refactored system prompt (persona-first, 4 rules, ~700 tokens)",
             ],
-            help="Pick which system prompt drives the agent. Swap between runs to A/B test voice quality and cost.",
+            help="Active test: system prompt version. Pick a variant per run to compare voice quality, cost, and success rate side-by-side. This control will host future A/B tests (DOM trimming, model swaps, retrieval modes) as they ship.",
         )
 
         submitted = st.form_submit_button("🚀 Start UX Audit", use_container_width=True, type="primary")
