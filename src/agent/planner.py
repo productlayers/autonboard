@@ -64,6 +64,9 @@ class ActionPlanner:
     def __init__(self):
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"), base_url=os.getenv("OPENAI_BASE_URL"))
         self.model = os.getenv("OPENAI_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+        # Cached once per run so the system prompt is token-identical across steps,
+        # enabling OpenAI's automatic prompt caching (identical prefix = cache hit after step 1).
+        self._memory_block_cache: str | None = None
 
     def _build_memory_block(self, persona: Persona) -> str:
         """
@@ -113,7 +116,9 @@ class ActionPlanner:
         Plans the next action. Returns (AgentAction, token_usage).
         """
         traits_str = ", ".join(persona.behavioral_traits)
-        memory_block = self._build_memory_block(persona)
+        if self._memory_block_cache is None:
+            self._memory_block_cache = self._build_memory_block(persona)
+        memory_block = self._memory_block_cache
         system_prompt = f"""
         You are {persona.name}.
         Background: {persona.background}

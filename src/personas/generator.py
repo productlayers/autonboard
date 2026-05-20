@@ -28,11 +28,25 @@ class PersonaGenerator:
         Name: {product_name}
         Scraped Landing Page Metadata: {product_description}
         PM's Hypothesized High-Value Action (HVA): {pm_hva}
-        
-        1. Infer the "First High-Value Action" that the product's onboarding flow is trying to get the user to complete.
-        2. Compare your inferred HVA with the PM's hypothesis. Are they aligned? Is the PM missing something? Output this to 'pm_hypothesis_alignment'.
-        3. Identify the top 3 distinct user segments (personas) for this product. Make sure they have varying levels of technical literacy and different behavioral traits.
-        
+
+        1. RESEARCH-BASED HVA INFERENCE: Based on established retention research for this product category —
+           NOT this product's specific onboarding or landing page copy — what is the first action a new user
+           could take in session one that would most predict whether they return? A good HVA is:
+           (a) achievable in a first session,
+           (b) demonstrates core product value — not account setup or profile completion,
+           (c) specific enough that you would know if it happened,
+           (d) the kind of action a retained user would have done in session one.
+           Reason from category-level knowledge (e.g. what drives retention in project management tools,
+           language learning apps, creative tools, etc.) — not from what this product's onboarding shows.
+
+        2. Compare your research-inferred HVA with the PM's hypothesis. Are they aligned? Is the PM's
+           hypothesis too shallow (e.g. just account creation) or does it capture real activation?
+           Output this to 'pm_hypothesis_alignment'.
+
+        3. Identify the top 3 distinct user segments (personas) for this product based on its category
+           and target market. Make sure they have varying levels of technical literacy and different
+           behavioral traits.
+
         Output the response strictly adhering to the provided JSON schema.
         """
 

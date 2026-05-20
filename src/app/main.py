@@ -60,10 +60,6 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
     generator = PersonaGenerator()
     analysis = await generator.analyze_product(product_name, product_desc, pm_hva)
 
-    console.print(f"[bold]PM's Hypothesized HVA:[/bold] {pm_hva}")
-    console.print(f"[bold]LLM's Inferred HVA:[/bold] {analysis.inferred_high_value_action}")
-    console.print(f"[bold]Audit Alignment:[/bold] {analysis.pm_hypothesis_alignment}\n")
-
     console.print("[bold]Generated Personas:[/bold]")
     for p in analysis.target_personas:
         console.print(f"- {p.name} (Tech Literacy: {p.technical_literacy})")
@@ -132,7 +128,13 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
             pm_hypothesis_alignment=analysis.pm_hypothesis_alignment
         )
 
-    # 4. Print Current Metrics
+    # 4. HVA Insight — surfaced here as a finding, not a setup parameter
+    console.print("\n[bold blue]=== HVA Audit ===[/bold blue]")
+    console.print(f"[bold]PM's Hypothesis:[/bold]       {pm_hva}")
+    console.print(f"[bold]Research-Inferred HVA:[/bold] {analysis.inferred_high_value_action}")
+    console.print(f"[bold]Alignment:[/bold]             {analysis.pm_hypothesis_alignment}")
+
+    # 5. Print Current Metrics
     metrics = EvalMetrics().get_metrics()
     console.print("\n[bold]Current Global Metrics:[/bold]")
     console.print(f"Total Runs: {metrics['total_runs']}")
