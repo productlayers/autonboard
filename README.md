@@ -24,18 +24,27 @@ src/
 │   └── main.py              # Entry point: orchestrates phases 0–5
 ├── agent/
 │   ├── orchestrator.py      # State machine loop: observe → plan → act
-│   ├── planner.py           # LLM-powered action planner with persona system prompt
-│   ├── observer.py          # DOM injection + annotated screenshot capture
-│   └── actor.py             # Playwright action executor
+│   ├── planner.py           # LLM-powered action planner (v1/v2 prompt versions)
+│   ├── observer.py          # DOM injection + viewport-priority element extraction
+│   ├── actor.py             # Playwright action executor
+│   ├── auth_hold.py         # Human-in-the-loop auth pause + resume flow
+│   └── reflector.py         # Post-run reflection and atom generation
 ├── personas/
-│   ├── generator.py         # LLM persona generation + HVA audit
+│   ├── generator.py         # LLM persona generation + research-based HVA inference
 │   └── schema.py            # Pydantic schemas for personas and product analysis
+├── memory/
+│   └── atoms.py             # Durable tactical memory (JSONL atom store)
 ├── core/
-│   └── browser.py           # Persistent browser session manager (Playwright)
+│   └── browser.py           # Ephemeral browser session manager (Playwright)
 ├── insights/
-│   └── logger.py            # Run logger → data/runs/runs.jsonl
-└── evals/
-    └── metrics.py           # Completion rate, friction events, token usage
+│   ├── logger.py            # Run logger → data/runs/runs.jsonl
+│   ├── analyzer.py          # LLM-powered post-run UX analysis
+│   └── narrator.py          # Live step narration (Web Speech API)
+├── evals/
+│   └── metrics.py           # Completion rate, friction events, token usage
+└── scripts/
+    ├── analyze_runs.py       # Aggregate run analysis CLI
+    └── compare_prompt_versions.py  # A/B prompt version comparison
 ```
 
 See [`docs/SPEC.md`](docs/SPEC.md) for the full architecture decision record and design rationale.
@@ -75,10 +84,11 @@ The browser will open, the agent will navigate the onboarding flow, and screensh
 
 ### Visualize Results
 
-To view real-time traces, screenshots, and UX findings, run the Streamlit dashboard in a separate terminal:
+To view real-time traces, screenshots, and UX findings, run the Streamlit dashboard:
 
 ```bash
-uv run streamlit run dashboard.py
+# Kill any previous instance and start fresh
+kill $(lsof -ti :8501) 2>/dev/null; uv run streamlit run dashboard.py
 ```
 
 ---
@@ -91,6 +101,7 @@ uv run streamlit run dashboard.py
 | `OPENAI_BASE_URL` | API base URL (e.g. `https://openrouter.ai/api/v1`) |
 | `OPENAI_MODEL` | Model to use (e.g. `openai/gpt-4o`) |
 | `HEADLESS` | Set to `true` to run without a visible browser window |
+| `PROMPT_VERSION` | `v1` (default, verbose) or `v2` (persona-first, ~70% fewer tokens) |
 
 ---
 
@@ -114,10 +125,23 @@ Each run appends a JSON record to `data/runs/runs.jsonl`:
   "product": "Notion",
   "persona": "Non-technical Entrepreneur",
   "target_action": "Create a new page and add a table",
+  "llm_inferred_hva": "Create and share a collaborative document with a teammate",
+  "hva_audit_alignment": "PM hypothesis is a setup step, not an activation moment — the real HVA is collaboration.",
   "status": "success",
   "steps": 12,
   "friction_events": 1,
   "total_tokens": 42800,
-  "history": [...]
+  "history": [
+    {
+      "step": 1,
+      "action_type": "click",
+      "funnel_stage": "landing_page",
+      "reasoning": "That 'Get started for free' button is hard to miss...",
+      "tokens": 6200,
+      "cached_tokens": 2816,
+      "prompt_version": "v2",
+      "screenshot_path": "data/runs/screenshots/notion_20260509_step1_landing_page.png"
+    }
+  ]
 }
 ```
