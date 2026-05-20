@@ -108,6 +108,23 @@ Add a `--mode directed|exploratory` CLI flag:
 
 ---
 
+## Tier 2 — DOM Trimming: Handle 150+ Visible Elements on Dense Pages
+
+### Problem
+The observer caps at 150 elements using viewport-first ordering. This handles most pages correctly — the agent sees what's on screen and scrolls to reach off-screen elements. But dense dashboards (e.g. a template gallery, a settings page, a data table) can have 150+ interactive elements visible simultaneously, causing viewport-visible elements to get cut off before the cap is reached.
+
+### Fix
+Add a second filtering pass before the cap:
+1. **Deduplicate by label** — if 10 nav items all say "Home", "Dashboard" etc. and one is clearly active, drop the redundant ones
+2. **Deprioritize structural noise** — footer links, cookie-policy links, generic "×" close buttons on non-blocking banners can be ranked below primary content elements
+3. **Optionally raise the cap dynamically** — if all 150 slots are viewport-visible, bump to 200 for that step only
+
+### Acceptance
+- A template gallery page (Airtable, Notion) with 200+ visible cards still surfaces the relevant content cards within the cap
+- No regression on standard pages (150 or fewer visible elements)
+
+---
+
 ## Tier 1 — Scroll Action Support
 
 **Problem:** The agent currently has no `scroll` action type. The observer only captures interactive elements visible in the viewport, and the planner can only click, type, navigate, or pause. On pages with below-the-fold content (long onboarding questionnaires, cookie banners pushing content down, infinite-scroll listings), the agent cannot discover or interact with elements it can't see — likely contributing to loops where it repeatedly clicks the same visible elements.
