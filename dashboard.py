@@ -383,6 +383,64 @@ html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
     line-height: 1.8;
     margin-bottom: 1rem;
 }
+
+/* Goal Framing block (insights → Story tab) */
+.framing-wrap {
+    background: linear-gradient(135deg, #161628 0%, #1a1a30 100%);
+    border: 1px solid #2e2e54;
+    border-radius: 14px;
+    padding: 1.1rem 1.3rem 1.2rem 1.3rem;
+    margin-bottom: 1.2rem;
+}
+.framing-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #a78bfa;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+.framing-row { display: flex; gap: 0.9rem; margin-bottom: 0.9rem; }
+.framing-cell {
+    flex: 1;
+    background: #0f0f1c;
+    border: 1px solid #2a2a4a;
+    border-radius: 10px;
+    padding: 0.8rem 0.95rem;
+}
+.framing-cell-label {
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+.framing-cell-value {
+    color: #e2e8f0;
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+.framing-cell.researched .framing-cell-label { color: #c7d2fe; }
+.framing-cell.researched { border-color: #4338ca; }
+.framing-alignment {
+    background: #11192e;
+    border-left: 3px solid #6366f1;
+    border-radius: 0 8px 8px 0;
+    padding: 0.7rem 0.95rem;
+    color: #cbd5e1;
+    font-size: 0.88rem;
+    line-height: 1.55;
+}
+.framing-alignment-label {
+    color: #818cf8;
+    font-weight: 600;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.3rem;
+    display: block;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -547,6 +605,30 @@ def render_insights(insights_data: dict, run_data: dict | None = None):
     
     # ── TAB: Story ──
     with tab_story:
+        # Goal Framing — interpret everything below against the right success criterion.
+        # Reads from run_data (live runs plumb HVA in; historical runs have it in runs.jsonl).
+        pm_goal = (run_data or {}).get("target_action", "")
+        research_hva = (run_data or {}).get("llm_inferred_hva", "")
+        alignment = (run_data or {}).get("hva_audit_alignment", "")
+        if pm_goal or research_hva:
+            st.markdown(f"""<div class="framing-wrap">
+                <div class="framing-label">🎯 Goal Framing</div>
+                <div class="framing-row">
+                    <div class="framing-cell">
+                        <div class="framing-cell-label">Your Hypothesis</div>
+                        <div class="framing-cell-value">{pm_goal or "—"}</div>
+                    </div>
+                    <div class="framing-cell researched">
+                        <div class="framing-cell-label">Research-Backed HVA</div>
+                        <div class="framing-cell-value">{research_hva or "—"}</div>
+                    </div>
+                </div>
+                {f'''<div class="framing-alignment">
+                    <span class="framing-alignment-label">Alignment</span>
+                    {alignment}
+                </div>''' if alignment else ''}
+            </div>""", unsafe_allow_html=True)
+
         narrative = insights_data.get("narrative", "")
         if narrative:
             # Extract first sentence as a pull-quote
@@ -759,23 +841,8 @@ with tab_new:
             analysis = asyncio.run(generate_personas())
             phase1.update(label="✅ AI personas generated", state="complete")
 
-        # HVA Audit Comparison
-        st.markdown("### 🎯 Success Goal Comparison")
-        st.caption("We compare your intended success goal with what our AI thinks the product's natural first milestone is.")
-        col_pm, col_llm = st.columns(2)
-        with col_pm:
-            st.markdown(f"""<div class="goal-card">
-                <h4>Your Success Goal</h4>
-                <p>{pm_hva}</p>
-            </div>""", unsafe_allow_html=True)
-        with col_llm:
-            st.markdown(f"""<div class="goal-card">
-                <h4>AI-Inferred Goal</h4>
-                <p>{analysis.inferred_high_value_action}</p>
-            </div>""", unsafe_allow_html=True)
-        
-        with st.expander("📝 Goal Alignment Analysis", expanded=True):
-            st.info(analysis.pm_hypothesis_alignment)
+        # NOTE: HVA comparison moved to insights section (Story tab) — it's a finding
+        # to interpret findings against, not a setup parameter to show before the run.
 
         # Persona Cards
         st.markdown("### 👥 AI-Generated Personas")
@@ -963,7 +1030,15 @@ with tab_new:
                     insight_status.update(label=f"❌ Insight extraction failed: {e}", state="error")
             
             if findings:
-                render_insights(findings.model_dump(), run_results)
+                # Plumb HVA fields into run_data so the Goal Framing block in render_insights
+                # works the same for live runs as for historical runs from runs.jsonl.
+                run_results_with_hva = {
+                    **run_results,
+                    "target_action": pm_hva,
+                    "llm_inferred_hva": analysis.inferred_high_value_action,
+                    "hva_audit_alignment": analysis.pm_hypothesis_alignment,
+                }
+                render_insights(findings.model_dump(), run_results_with_hva)
 
             is_success = run_results.get("run_success", False)
             status_class = "status-success" if is_success else "status-failed"

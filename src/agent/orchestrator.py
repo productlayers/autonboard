@@ -205,7 +205,7 @@ class AgentOrchestrator:
                 await asyncio.sleep(2)
                 step_start_time = time.time()
 
-                action, step_tokens = await self.planner.plan_next_action(
+                action, step_tokens, step_cached_tokens = await self.planner.plan_next_action(
                     persona=persona,
                     target_action=target_action,
                     current_url=current_url,
@@ -233,8 +233,9 @@ class AgentOrchestrator:
                 self.partial_results["total_tokens"] = total_tokens
                 self.partial_results["friction_events"] = friction_events
 
+                cache_note = f", {step_cached_tokens:,} cached" if step_cached_tokens else ""
                 console.print(
-                    f"[{persona.name}] decided to: [yellow]{action.action_type}[/yellow] on element [yellow]{action.element_id}[/yellow] ({step_tokens} tokens)"
+                    f"[{persona.name}] decided to: [yellow]{action.action_type}[/yellow] on element [yellow]{action.element_id}[/yellow] ({step_tokens} tokens{cache_note})"
                 )
                 console.print(f"Reasoning: {action.reasoning}")
 
@@ -277,6 +278,8 @@ class AgentOrchestrator:
                     "success": False,
                     "error_msg": "",
                     "latency_ms": 0,
+                    "tokens": step_tokens,
+                    "cached_tokens": step_cached_tokens,
                 }
 
                 # 3. Handle Special States

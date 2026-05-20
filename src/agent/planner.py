@@ -111,9 +111,12 @@ class ActionPlanner:
         base64_image: str,
         history: list[AgentAction],
         environmental_feedback: str = "",
-    ) -> tuple[AgentAction, int]:
+    ) -> tuple[AgentAction, int, int]:
         """
-        Plans the next action. Returns (AgentAction, token_usage).
+        Plans the next action. Returns (AgentAction, total_tokens, cached_tokens).
+        `cached_tokens` reports how many input tokens were served from OpenAI's
+        automatic prompt cache via OpenRouter — non-zero after step 1 confirms
+        the system prompt is being reused across calls within a run.
         """
         traits_str = ", ".join(persona.behavioral_traits)
         if self._memory_block_cache is None:
@@ -214,4 +217,13 @@ class ActionPlanner:
         if action is None:
             raise RuntimeError("LLM returned no parsed AgentAction")
         tokens = response.usage.total_tokens if response.usage else 0
-        return action, tokens
+        # OpenAI returns cached input tokens in prompt_tokens_details.cached_tokens.
+        # OpenRouter passes this through transparently for GPT-4o.
+        cached = 0
+        try:
+            details = getattr(response.usage, "prompt_tokens_details", None)
+            if details is not None:
+                cached = getattr(details, "cached_tokens", 0) or 0
+        except Exception:
+            cached = 0
+        return action, tokens, cached
