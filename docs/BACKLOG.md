@@ -212,6 +212,20 @@ Computed at log time by aggregating steps within the same `funnel_stage`. Shows 
 
 ---
 
+## Tier 2 — Browser Cleanup on Crash
+
+### Problem
+`orchestrator.py` calls `browser.stop()` only on the happy path (line ~368, headless only) and the call is *not* inside a `try/finally`. If anything above it throws — observation failure, planner exception, network blip — the Playwright Chrome process leaks. These are silent: they pile up in the Dock / process table and only surface when the machine slows down. Headless crashes are especially hard to notice because there's no visible window.
+
+### Fix
+Wrap the orchestrator run loop in `try/finally` and call `await self.browser.stop()` in the `finally`, gated only by "did we start the browser." Non-headless inspection-hold should still happen in `main.py` after the orchestrator returns (already done — `main.py` waits on the context `close` event, then calls `browser.stop()`).
+
+### Acceptance
+- Force a crash mid-run in headless mode → no `Google Chrome for Testing` process left behind (`ps aux | grep -i chrom`).
+- Force a crash mid-run in headed mode → window stays open for inspection; closing it triggers cleanup.
+
+---
+
 ## Tier 3 — Future Ideas
 
 ### `persona_frustration_score`

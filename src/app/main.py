@@ -141,15 +141,23 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
     console.print(f"Completion Rate: {metrics['completion_rate']:.0%}")
     console.print(f"Avg Friction Events (Human Interventions): {metrics['avg_friction_events']:.1f}")
 
-    # 5. Keep browser open for inspection if NOT headless
-    if not headless:
-        console.print("\n[bold yellow]Audit complete. Keeping browser open for inspection...[/bold yellow]")
-        console.print("[yellow]Press Ctrl+C again to close the browser and exit.[/yellow]")
+    # 5. Keep browser open for inspection if NOT headless.
+    # When the user manually closes the window, clean up Playwright fully so
+    # no Chrome process lingers in the Dock.
+    if not headless and orchestrator.browser.context is not None:
+        console.print("\n[bold yellow]Audit complete. Browser is yours — close it when done.[/bold yellow]")
+        closed = asyncio.Event()
+        orchestrator.browser.context.on("close", lambda _: closed.set())
         try:
-            while True:
-                await asyncio.sleep(3600) # Wait for an hour (or until Ctrl+C)
+            await closed.wait()
         except (asyncio.CancelledError, KeyboardInterrupt):
             pass
+        finally:
+            try:
+                await orchestrator.browser.stop()
+            except Exception:
+                pass
+            console.print("[dim]Browser closed. Playwright stopped.[/dim]")
 
 
 def main():
