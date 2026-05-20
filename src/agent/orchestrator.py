@@ -19,10 +19,11 @@ console = Console()
 class AgentOrchestrator:
     """The main state machine loop for the autonomous browser agent."""
 
-    def __init__(self, headless: bool = False, on_pause=None):
+    def __init__(self, headless: bool = False, on_pause=None, prompt_version: str | None = None):
         self.browser = BrowserManager(headless=headless, on_pause=on_pause)
         self.observer = DOMObserver()
-        self.planner = ActionPlanner()
+        # prompt_version is forwarded to the planner; None falls back to env var or default
+        self.planner = ActionPlanner(prompt_version=prompt_version)
         self.actor = PlaywrightActor()
 
     def _set_active_page(self, active_page) -> None:

@@ -61,13 +61,12 @@ _FUNNEL_STAGE_ORDER = [
 class ActionPlanner:
     """Uses LLM to decide the next action based on Persona, Goal, and DOM state."""
 
-    def __init__(self):
+    def __init__(self, prompt_version: str | None = None):
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY", "dummy"), base_url=os.getenv("OPENAI_BASE_URL"))
         self.model = os.getenv("OPENAI_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
-        # PROMPT_VERSION selects which system prompt to use. "v1" = original (verbose, 16 rules),
-        # "v2" = refactored (tighter, persona-first, uses primary_goal + pain_points). Default "v1"
-        # so existing runs are unaffected; flip to "v2" via env to A/B test.
-        self.prompt_version = os.getenv("PROMPT_VERSION", "v1").lower().strip()
+        # Prompt version: explicit param wins, then PROMPT_VERSION env var, then default "v1".
+        # "v1" = original (verbose, 16 rules), "v2" = refactored (tighter, persona-first).
+        self.prompt_version = (prompt_version or os.getenv("PROMPT_VERSION", "v1")).lower().strip()
         # Cached once per run so the system prompt is token-identical across steps,
         # enabling OpenAI's automatic prompt caching (identical prefix = cache hit after step 1).
         self._memory_block_cache: str | None = None

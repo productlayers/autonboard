@@ -801,7 +801,19 @@ with tab_new:
         product_url = st.text_input("🔗 Product URL", placeholder="https://www.notion.so", help="The landing page or signup page of the product you want to audit.")
         pm_hva = st.text_input("🎯 Success Goal", placeholder="Create a new page and add a heading", help="What's the first meaningful thing you want a new user to accomplish? This is the goal your AI persona will try to reach.")
         narration_on = st.toggle("🔊 Live Narration", value=False, help="When enabled, the AI persona's reasoning is read aloud at each step.")
-        
+
+        prompt_version = st.radio(
+            "🧠 Prompt Version",
+            options=["v1", "v2"],
+            index=0,
+            horizontal=True,
+            captions=[
+                "Original — verbose, 16 numbered rules, ~2,200 tokens",
+                "Refactored — persona-first, 4 hard rules, ~700 tokens (3x lighter)",
+            ],
+            help="Pick which system prompt drives the agent. Swap between runs to A/B test voice quality and cost.",
+        )
+
         submitted = st.form_submit_button("🚀 Start UX Audit", use_container_width=True, type="primary")
 
     if submitted and product_url and pm_hva:
@@ -933,7 +945,7 @@ with tab_new:
         # Run the orchestrator — always log, even on crash/interrupt
         run_results = None
         async def run_orchestrator():
-            orchestrator = AgentOrchestrator(headless=False, on_pause=on_pause)
+            orchestrator = AgentOrchestrator(headless=False, on_pause=on_pause, prompt_version=prompt_version)
             return await orchestrator.run(
                 persona=target_persona,
                 product_name=product_name,
