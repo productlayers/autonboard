@@ -226,6 +226,29 @@ Wrap the orchestrator run loop in `try/finally` and call `await self.browser.sto
 
 ---
 
+## Tier 2 — Live Narration (Re-enable with proper TTS)
+
+### Problem
+Web Speech API has two blockers that make narration unusable:
+1. **Quality**: OS-level voices are robotic with no prosody control — sounds nothing like a real persona
+2. **Overlap**: `st_components.html()` creates a new iframe per call, so `speechSynthesis.cancel()` in iframe N can't stop playback in iframe N-1 — narrations pile up and talk over each other
+
+Toggle is hidden in the dashboard until fixed.
+
+### Fix
+Replace Web Speech API with a proper neural TTS service. Options in priority order:
+- **ElevenLabs free tier** (10k chars/month) — best voice quality, persona-specific voice cloning possible
+- **OpenAI TTS-1** — good quality, but requires a direct OpenAI API key (not via OpenRouter)
+
+For the overlap issue: maintain a single persistent iframe that receives text via `postMessage` and manages the speech queue internally.
+
+### Acceptance
+- Toggle re-enabled in dashboard
+- No overlap between step narrations
+- Voice quality clearly reflects persona character (not robotic)
+
+---
+
 ## Tier 3 — Future Ideas
 
 ### `persona_frustration_score`

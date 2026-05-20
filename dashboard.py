@@ -801,7 +801,12 @@ with tab_new:
     with st.form("audit_form"):
         product_url = st.text_input("🔗 Product URL", placeholder="https://www.notion.so", help="The landing page or signup page of the product you want to audit.")
         pm_hva = st.text_input("🎯 Success Goal", placeholder="Create a new page and add a heading", help="What's the first meaningful thing you want a new user to accomplish? This is the goal your AI persona will try to reach.")
-        narration_on = st.toggle("🔊 Live Narration", value=False, help="When enabled, the AI persona's reasoning is read aloud at each step.")
+        # 🔊 Live Narration hidden — Web Speech API has two blockers:
+        # (1) robotic OS voices, no neural TTS quality
+        # (2) each st_components.html() call is a separate iframe so
+        #     speechSynthesis.cancel() can't stop the previous utterance → overlap
+        # Revisit when ElevenLabs free tier or OpenAI TTS is wired up.
+        narration_on = False  # st.toggle("🔊 Live Narration", value=False, ...)
 
         prompt_version = st.radio(
             "🧪 A/B Test",

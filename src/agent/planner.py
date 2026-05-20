@@ -275,7 +275,7 @@ EXAMPLES:
         ]
 
         response = await self.client.beta.chat.completions.parse(
-            model=self.model, messages=messages, response_format=AgentAction, temperature=0.0
+            model=self.model, messages=messages, response_format=AgentAction, temperature=0.35
         )
 
         action = response.choices[0].message.parsed
