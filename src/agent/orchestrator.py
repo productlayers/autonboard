@@ -77,6 +77,7 @@ class AgentOrchestrator:
         }
 
         try:
+            post_auth_note = ""  # Injected into next step's environmental_feedback after human logs in
             for step in range(1, max_steps + 1):
                 console.print(f"\n[bold]Step {step}/{max_steps}[/bold]")
 
@@ -124,6 +125,9 @@ class AgentOrchestrator:
                     current_url = page.url
 
                 environmental_feedback = ""
+                if post_auth_note:
+                    environmental_feedback += post_auth_note
+                    post_auth_note = ""  # consume once
                 if prev_error:
                     environmental_feedback += f"ENVIRONMENTAL FEEDBACK: Your last action failed with browser error: '{prev_error}'. The element might be hidden, blocked by a popup, or unclickable. You must try a different approach.\n"
                 elif step > 1 and dom_state == prev_dom_state:
@@ -309,6 +313,12 @@ class AgentOrchestrator:
                             on_pause=self.browser.on_pause,
                         )
                         step_dict["auth_hold_resume"] = resume_mode
+                        post_auth_note = (
+                            "SYSTEM NOTE: A human just completed login on your behalf. "
+                            "You are now fully authenticated and inside the product. "
+                            "Do NOT mention login or authentication as friction in your reasoning — "
+                            "treat yourself as already logged in and focus on what's in front of you."
+                        )
                         if self.browser.page and not self.browser.page.is_closed():
                             page = self.browser.page
                     else:

@@ -160,6 +160,12 @@ class DOMObserver:
         # Extract page title
         page_title = await page.title()
 
+        # Cap elements to keep DOM tokens manageable on complex SPAs.
+        # Full DOM trimming (viewport-priority filtering) is in the backlog.
+        MAX_ELEMENTS = 150
+        if len(elements) > MAX_ELEMENTS:
+            elements = elements[:MAX_ELEMENTS]
+
         lines = []
         for el in elements:
             type_str = f" type='{el['type']}'" if el["type"] else ""
