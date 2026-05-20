@@ -12,7 +12,7 @@ class DOMObserver:
     () => {
         let counter = 1;
         const elements = [];
-        const interactiveSelectors = 'a, button, input, select, textarea, label, [role="button"], [role="radio"], [role="checkbox"], [role="menuitem"], [tabindex="0"]';
+        const interactiveSelectors = 'a, button, input, select, textarea, label, [contenteditable="true"], [role="button"], [role="radio"], [role="checkbox"], [role="menuitem"], [tabindex="0"]';
         
         const candidateElements = [];
         document.querySelectorAll(interactiveSelectors).forEach(el => candidateElements.push(el));
@@ -27,19 +27,50 @@ class DOMObserver:
         });
         
         candidateElements.forEach(el => {
+            const rect = el.getBoundingClientRect();
+            
             // Skip hidden elements
             const style = window.getComputedStyle(el);
-            if (style.display === 'none' || style.visibility === 'hidden' || el.offsetWidth === 0 || el.offsetHeight === 0) {
+            if (style.display === 'none' || style.visibility === 'hidden' || rect.width === 0 || rect.height === 0) {
                 return;
+            }
+            
+            // Filter out generic containers if they contain formally interactive descendant elements
+            // to ensure the agent only interacts with specific leaf-level target options.
+            const genericContainers = ['DIV', 'SPAN', 'LI', 'UL', 'OL', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER'];
+            if (genericContainers.includes(el.tagName)) {
+                const hasFormalInteractiveDescendant = Array.from(el.querySelectorAll('a, button, input, select, textarea, [contenteditable="true"], [role="button"]')).some(child => {
+                    return candidateElements.includes(child);
+                });
+                if (hasFormalInteractiveDescendant) {
+                    return;
+                }
+            }
+            
+            // Skip visually obscured elements (e.g. background elements covered by active modals/dialogs)
+            try {
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                const isWithinViewport = (
+                    centerX >= 0 &&
+                    centerY >= 0 &&
+                    centerX <= window.innerWidth &&
+                    centerY <= window.innerHeight
+                );
+                if (isWithinViewport) {
+                    const topEl = document.elementFromPoint(centerX, centerY);
+                    if (topEl && !el.contains(topEl) && !topEl.contains(el)) {
+                        return;
+                    }
+                }
+            } catch (e) {
+                // Safely ignore cross-origin or node exceptions and do not filter out the element
             }
             
             // Assign our custom attribute
             const bffId = counter.toString();
             el.setAttribute('bff-id', bffId);
             counter++;
-            
-            // Draw Bounding Box for Vision Model
-            const rect = el.getBoundingClientRect();
             const box = document.createElement('div');
             box.className = 'bff-som-box';
             box.style.position = 'absolute';

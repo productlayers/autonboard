@@ -36,7 +36,15 @@ class AgentAction(BaseModel):
         "product_tour",
         "first_action",
         "hva_achieved",
-    ] = Field(description="Classify which stage of the onboarding funnel you are currently in.", default="landing_page")
+    ] = Field(
+        description=(
+            "Classify the current stage of the onboarding funnel. "
+            "Use 'authentication' ONLY when active credential/MFA input fields (e.g., email, password, username, SSO login fields, verification codes) are visible on the screen. "
+            "Use 'onboarding_questionnaire' for any post-login setup steps, profile details, nickname/name choices, age or birthday forms, role/team invitations, preference checklist pages, or onboarding surveys. "
+            "This distinction is critical: 'authentication' triggers a complete human-in-the-loop pause hold, whereas 'onboarding_questionnaire' allows you to fill out forms autonomously based on your persona."
+        ),
+        default="landing_page",
+    )
 
 
 _FUNNEL_STAGE_ORDER = [
@@ -179,7 +187,7 @@ class ActionPlanner:
         INTERACTIVE ELEMENTS ON SCREEN (Use these numeric labels for clicking/typing):
         {dom_state}
         
-        Look at the screenshot and your history. What is the single most effective next step to reach your goal: '{target_action}'?
+        Look at the screenshot and your recent history. You are a first-time user exploring this product. You loosely want to '{target_action}', but you do NOT have a fixed plan and you are NOT executing a checklist. Notice what stands out on the screen, react as the persona would, and choose what you'd naturally do next — even if that means lingering on something interesting before progressing the main flow.
         """
 
         messages = [
