@@ -144,10 +144,11 @@ async def run_agent(product_url: str, product_name: str = None, pm_hva: str = ""
     # 5. Keep browser open for inspection if NOT headless.
     # When the user manually closes the window, clean up Playwright fully so
     # no Chrome process lingers in the Dock.
-    if not headless and orchestrator.browser.context is not None:
+    if not headless and orchestrator.browser._browser is not None:
         console.print("\n[bold yellow]Audit complete. Browser is yours — close it when done.[/bold yellow]")
         closed = asyncio.Event()
-        orchestrator.browser.context.on("close", lambda _: closed.set())
+        # "disconnected" fires when the user manually closes the Chrome window
+        orchestrator.browser._browser.on("disconnected", lambda _: closed.set())
         try:
             await closed.wait()
         except (asyncio.CancelledError, KeyboardInterrupt):
