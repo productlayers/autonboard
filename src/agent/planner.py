@@ -128,6 +128,7 @@ class ActionPlanner:
         3. If you see a CAPTCHA, or if you would genuinely be stuck/confused by the current screen, output "pause_for_human".
         4. Do not try to interact with elements marked [DISABLED]. This includes trying to click disabled 'CONTINUE', 'NEXT', or 'CHECK' buttons before selecting a prerequisite option first.
         5. FATAL RULE: If you receive ENVIRONMENTAL FEEDBACK that an action failed OR had no visible effect, you are STRICTLY FORBIDDEN from trying the exact same action on the exact same element ID again.
+        5b. INPUT FIELDS → MUST TYPE: If you identify a text input, search box, or chat input as the right place to act, your action MUST be "type" (with text_to_type filled in) — NOT "click". Clicking a text box without typing does nothing. Focusing an input without typing is a wasted step.
         6. If your Recent History shows you repeating the same sequence of actions, you are stuck. Break the loop.
         7. MODALS & COOKIES: If you feel you are being blocked by a modal, cookie banner, or overlay, your FIRST priority is to DISMISS it. For cookie banners specifically, prefer 'Reject', 'Decline', 'No thanks', or 'Cancel' over 'Accept' — do NOT click 'Accept All' or 'Accept Cookies' unless those are the only options. For other modals, look for 'Close', 'X', or 'Got it' buttons.
         8. If you accidentally opened a useless tab, output "close_tab".
@@ -184,11 +185,12 @@ How you behave online: {traits_str}
 
 {memory_block}
 
-Right now you're trying this product for the first time. You loosely want to {target_action}, but you're exploring as you naturally would — not executing a checklist. Notice what stands out, react as you'd react, choose what feels right for someone like you.
+Right now you're trying this product for the first time. You loosely want to {target_action}, but you're exploring as you naturally would — not executing a checklist. React as you'd react, choose what feels right for someone like you.
 
 NON-NEGOTIABLE RULES (these override character):
 - SECURITY PAUSE: Output "pause_for_human" only when authenticating — entering a password or verification code to prove identity on an existing account. Creating a new identity is fine: fill in first name, last name, chosen username/handle, and any other profile setup fields in character. The rule is authentication (password/code), not creation.
 - BREAK LOOPS: If environmental feedback says an action just failed or had no visible effect, do NOT try the same action on the same element again. Try something different.
+- INPUT FIELDS → TYPE: If you identify a text input or chat box as the right place to act, your action MUST be "type", not "click". Clicking a text input without typing into it does nothing. Always follow focus with content.
 - DONE WHEN DONE: If you've reached the high-value action you set out to do, output "done".
 - ACCIDENTAL TABS: If you accidentally opened a Privacy Policy, Terms of Service, or external help article, output "close_tab".
 
@@ -253,16 +255,16 @@ EXAMPLES:
 
         user_prompt = f"""
         Current URL: {current_url}
-        
+
         RECENT MEMORY (Detailed narrative of last {window_size} steps):
         {history_str}
-        
+
         {environmental_feedback}
-        
+
         INTERACTIVE ELEMENTS ON SCREEN (Use these numeric labels for clicking/typing):
         {dom_state}
-        
-        Look at the screenshot and your recent history. You are a first-time user exploring this product. You loosely want to '{target_action}', but you do NOT have a fixed plan and you are NOT executing a checklist. Notice what stands out on the screen, react as the persona would, and choose what you'd naturally do next — even if that means lingering on something interesting before progressing the main flow.
+
+        Look at the screenshot and your recent history. You are a first-time user exploring this product. You loosely want to '{target_action}', but you do NOT have a fixed plan and you are NOT executing a checklist. React as the persona would and choose what you'd naturally do next — even if that means lingering on something interesting before progressing the main flow.
         """
 
         messages = [

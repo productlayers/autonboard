@@ -172,6 +172,56 @@ Add a second filtering pass before the cap:
 
 ---
 
+## Tier 1 — Experiment Tracking: Run Tagging + Experiment Registry
+
+### Problem
+The run JSONL captures *what happened* but not *what configuration produced it* or *what experiment it belongs to*. As prompt changes multiply (v1 vs v2, temperature variants, rule additions, atom changes), runs become unattributable — you can't tell whether a regression came from a prompt change, a code change, an atom, or temperature variance. There's also no way to define multi-arm experiments (control + N treatment groups) and group runs into them for comparison.
+
+### Design: Two-level structure
+
+**Level 1 — Per-run config** (auto-captured, no manual input):
+```json
+"experiment_id": "exp_2026-05-20_input-type-rule",
+"experiment_group": "treatment_1",
+"run_config": {
+  "prompt_version": "v1",
+  "temperature": 0.35,
+  "model": "openai/gpt-4o",
+  "code_sha": "abc1234",
+  "atoms_loaded": ["dee4a908-...", "atm_32ed..."]
+}
+```
+
+**Level 2 — Experiment registry** (`data/experiments/experiments.jsonl`, defined once per experiment):
+```json
+{
+  "id": "exp_2026-05-20_input-type-rule",
+  "hypothesis": "Adding input→type rule reduces Omni chat navigation loops",
+  "change_tested": "Rule 5b added to planner v1 and v2",
+  "groups": {
+    "control":     { "description": "v1 baseline, temp=0.0" },
+    "treatment_1": { "description": "v1 + input-type rule, temp=0.35" },
+    "treatment_2": { "description": "v2 + input-type rule, temp=0.35" }
+  },
+  "metrics": ["steps_to_completion", "total_tokens", "friction_events", "status"],
+  "created_at": "2026-05-20"
+}
+```
+
+### Implementation
+- `run_config` auto-populated by `RunLogger` from env vars + `git rev-parse HEAD` + `find_atoms()`
+- `experiment_id` and `experiment_group` set via env vars (`EXPERIMENT_ID`, `EXPERIMENT_GROUP`) — no experiment tag if not set
+- `write_experiment()` API in a new `src/experiments/registry.py` module (follows data file rule — no raw file I/O)
+- Comparison script: `scripts/compare_experiment.py --experiment-id exp_2026-05-20_input-type-rule`
+
+### Acceptance
+- Every new run record contains `run_config` (automatic, always)
+- Runs tagged with `experiment_id` when env var is set
+- Comparison script groups runs by `experiment_id` + `experiment_group`, outputs metric table
+- Dashboard "past runs" view can filter by experiment
+
+---
+
 ## Tier 2 — Enhanced Telemetry Fields
 
 ### `question_asked`
