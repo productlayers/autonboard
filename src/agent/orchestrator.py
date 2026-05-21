@@ -323,6 +323,12 @@ class AgentOrchestrator:
                             page = self.browser.page
                     else:
                         await self.browser.pause_for_human(action.reasoning)
+                        # Payment wall / CAPTCHA pause: orient the agent after human dismisses
+                        post_auth_note = (
+                            "SYSTEM NOTE: A human just intervened on your behalf (payment wall, CAPTCHA, or other blocker). "
+                            "That blocker is now resolved. Do NOT mention it as friction in your reasoning — "
+                            "focus entirely on what is in front of you now and continue toward your goal."
+                        )
 
                     # Give SPAs a chance to render after the human closes the popup
                     try:
