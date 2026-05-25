@@ -35,3 +35,7 @@ data/browser_profile/
 data/runs/
 data/screenshots/
 results/
+
+# Demo data is committed — used by Lovable dashboard
+!data/demo/
+!data/demo/**
