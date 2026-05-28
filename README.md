@@ -7,7 +7,7 @@ BFF adopts dynamic user personas to evaluate the usability and time-to-value of 
 ---
 
 [![Watch the demo](docs/demo-preview.png)](https://www.loom.com/share/6ddad93ff98f47f59df359f93b77e097)
-*▶ Watch the demo*
+*▲ Tap the thumbnail to watch the demo*
 
 ---
 
