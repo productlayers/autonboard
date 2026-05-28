@@ -11,8 +11,9 @@ BFF adopts dynamic user personas to evaluate the usability and time-to-value of 
 1. **Product Discovery** — Scrapes landing page metadata to understand the product context.
 2. **Persona Generation** — Uses an LLM to generate 3 distinct user personas with varying technical literacy and behavioral traits, tuned to the specific product.
 3. **HVA Audit** — Compares the PM's hypothesized High-Value Action against the LLM's independent inference to surface alignment gaps.
-4. **Agent Execution** — Drives a real Chromium browser via Playwright, with the agent reasoning in the persona's voice at every step.
+4. **Agent Execution** — Drives a real Chromium browser via Playwright. At every step the agent narrates out loud in the persona's voice — what it notices, what it expects, and why it's acting — producing a first-person think-aloud trace alongside the action log.
 5. **Telemetry Logging** — Every step is logged with timestamp, URL, funnel stage, action, persona reasoning, and screenshot path to `data/runs/runs.jsonl`.
+6. **Reflection** — After a run, the dashboard triggers a post-run reflection pass that extracts friction patterns and writes new memory atoms — durable tactical learnings (e.g. "on Airtable, type to confirm an AI-proposed plan rather than clicking") that are injected into the planner on future runs. The system gets more effective the more it runs.
 
 ---
 
@@ -42,9 +43,10 @@ src/
 │   └── narrator.py          # Live step narration (Web Speech API)
 ├── evals/
 │   └── metrics.py           # Completion rate, friction events, token usage
-└── scripts/
-    ├── analyze_runs.py       # Aggregate run analysis CLI
-    └── compare_prompt_versions.py  # A/B prompt version comparison
+
+scripts/
+├── analyze_runs.py           # Aggregate run analysis CLI
+└── compare_prompt_versions.py  # A/B prompt version comparison
 ```
 
 See [`docs/SPEC.md`](docs/SPEC.md) for the full architecture decision record and design rationale.
@@ -100,8 +102,7 @@ kill $(lsof -ti :8501) 2>/dev/null; uv run streamlit run dashboard.py
 | `OPENAI_API_KEY` | Your OpenRouter (or OpenAI-compatible) API key |
 | `OPENAI_BASE_URL` | API base URL (e.g. `https://openrouter.ai/api/v1`) |
 | `OPENAI_MODEL` | Model to use (e.g. `openai/gpt-4o`) |
-| `HEADLESS` | Set to `true` to run without a visible browser window |
-| `PROMPT_VERSION` | `v1` (default, verbose) or `v2` (persona-first, ~70% fewer tokens) |
+| `HEADLESS` | Set to `true` to run without a visible browser window (also available as `--headless` CLI flag) |
 
 ---
 
@@ -121,7 +122,6 @@ Each run appends a JSON record to `data/runs/runs.jsonl`:
 
 ```json
 {
-  "run_id": "20260509_180000",
   "product": "Notion",
   "persona": "Non-technical Entrepreneur",
   "target_action": "Create a new page and add a table",
@@ -133,7 +133,6 @@ Each run appends a JSON record to `data/runs/runs.jsonl`:
   "total_tokens": 42800,
   "history": [
     {
-      "step": 1,
       "action_type": "click",
       "funnel_stage": "landing_page",
       "reasoning": "That 'Get started for free' button is hard to miss...",
